@@ -156,36 +156,38 @@ class ImageProcessor:
             if base_image is None or aligned_image is None:
                 return None
 
-            # 分别处理每个颜色通道
-            b1, g1, r1 = cv2.split(base_image)
-            b2, g2, r2 = cv2.split(aligned_image)
+            # 转换为灰度图进行处理
+            base_gray = cv2.cvtColor(base_image, cv2.COLOR_BGR2GRAY)
+            aligned_gray = cv2.cvtColor(aligned_image, cv2.COLOR_BGR2GRAY)
 
-            # 计算每个通道的差异并合并
-            diff_b = cv2.absdiff(b1, b2)
-            diff_g = cv2.absdiff(g1, g2)
-            diff_r = cv2.absdiff(r1, r2)
+            # 对图像进行轻微的高斯模糊，减少噪点但保留细节
+            base_gray = cv2.GaussianBlur(base_gray, (3, 3), 0)
+            aligned_gray = cv2.GaussianBlur(aligned_gray, (3, 3), 0)
 
-            # 使用最大差异作为判断依据
-            max_diff = cv2.max(cv2.max(diff_b, diff_g), diff_r)
+            # 计算差异
+            diff = cv2.absdiff(base_gray, aligned_gray)
 
-            # 对差异图像进行自适应阈值处理
-            # 先对差异图像进行高斯模糊，减少噪点
-            blurred_diff = cv2.GaussianBlur(max_diff, (3, 3), 0)
+            # 使用Canny边缘检测来增强细线条的检测
+            base_edges = cv2.Canny(base_gray, 50, 150)
+            aligned_edges = cv2.Canny(aligned_gray, 50, 150)
+            edge_diff = cv2.absdiff(base_edges, aligned_edges)
 
-            # 使用自适应阈值，这样可以更好地处理不同亮度区域
+            # 合并普通差异和边缘差异
+            combined_diff = cv2.addWeighted(diff, 0.5, edge_diff, 0.5, 0)
+
+            # 使用较小的自适应阈值块大小，以更好地处理局部细节
             mask = cv2.adaptiveThreshold(
-                blurred_diff,
+                combined_diff,
                 255,
                 cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
                 cv2.THRESH_BINARY_INV,
-                11,  # 邻域大小
-                2    # 常数差值
+                7,  # 7 较小的邻域大小，更敏感于局部变化
+                1   # 1 较小的常数差值，更敏感于细微差异
             )
 
-            # 对掩码进行形态学处理
-            kernel = np.ones((3, 3), np.uint8)
-            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)  # 先闭运算
-            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)   # 再开运算
+            # 对掩码进行最小程度的形态学处理
+            kernel = np.ones((2, 2), np.uint8)  # 使用更小的核
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)  # 只进行开运算，去除极小的噪点
 
             # 转回BGR格式
             mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)

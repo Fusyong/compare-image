@@ -199,7 +199,7 @@ class ImageComparisonApp:
         # 如果正在比较状态，切换回原图状态
         if self.is_comparing:
             self.is_comparing = False
-            self.compare_button.configure(text="比较图像")
+            self.compare_button.configure(text="开始比较")
 
         # 显示图像
         if side == "left":
