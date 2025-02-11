@@ -20,6 +20,13 @@ class ImageComparisonApp:
         self.right_markers = [(5, 5), (95, 95)]  # R1, R2 (R2在右下角-5的位置)
         self.active_marker = None
 
+        # 放大镜参数
+        self.magnifier_size = 100  # 放大区域的大小
+        self.magnifier_scale = 4   # 放大倍数
+        self.magnifier_visible = False
+        self.last_mouse_x = 0
+        self.last_mouse_y = 0
+
         # 比较状态
         self.is_comparing = False
         self.compare_mode = "compare"  # "compare" 或 "overlay"
@@ -235,6 +242,7 @@ class ImageComparisonApp:
     def start_drag(self, event, side):
         canvas = self.left_canvas if side == "left" else self.right_canvas
         markers = self.left_markers if side == "left" else self.right_markers
+        image = self.left_image if side == "left" else self.right_image
 
         # 检查是否点击了标记点
         canvas_width = canvas.winfo_width()
@@ -245,6 +253,10 @@ class ImageComparisonApp:
         for i, (mx, my) in enumerate(markers):
             if abs(x_rel - mx) < 5 and abs(y_rel - my) < 5:
                 self.active_marker = (side, i)
+                self.magnifier_visible = True
+                self.last_mouse_x = event.x
+                self.last_mouse_y = event.y
+                self.update_magnifier(event, canvas, image)
                 break
 
     def drag(self, event, side):
@@ -253,6 +265,7 @@ class ImageComparisonApp:
 
         canvas = self.left_canvas if side == "left" else self.right_canvas
         markers = self.left_markers if side == "left" else self.right_markers
+        image = self.left_image if side == "left" else self.right_image
 
         # 更新标记点位置
         canvas_width = canvas.winfo_width()
@@ -268,11 +281,21 @@ class ImageComparisonApp:
         elif side == "right" and self.right_image is not None:
             self.display_image(self.right_canvas, self.right_image, self.right_markers)
 
+        # 更新放大镜
+        self.last_mouse_x = event.x
+        self.last_mouse_y = event.y
+        self.update_magnifier(event, canvas, image)
+
         # 更新坐标输入框
         self.update_coordinate_entries()
 
     def end_drag(self, event):
         self.active_marker = None
+        self.magnifier_visible = False
+        # 清除放大镜
+        if hasattr(self, 'magnifier_window'):
+            self.magnifier_window.destroy()
+            delattr(self, 'magnifier_window')
 
     def update_coordinate_entries(self):
         # 更新左图坐标
@@ -296,6 +319,59 @@ class ImageComparisonApp:
         self.r2_x.insert(0, f"{self.right_markers[1][0]:.1f}")
         self.r2_y.delete(0, tk.END)
         self.r2_y.insert(0, f"{self.right_markers[1][1]:.1f}")
+
+    def update_magnifier(self, event, canvas, image):
+        if not self.magnifier_visible or image is None:
+            return
+
+        # 获取鼠标位置对应的图像坐标
+        canvas_width = canvas.winfo_width()
+        canvas_height = canvas.winfo_height()
+        img_height, img_width = image.shape[:2]
+
+        # 计算图像上的实际位置
+        x = int(event.x * img_width / canvas_width)
+        y = int(event.y * img_height / canvas_height)
+
+        # 确定放大区域的范围
+        half_size = self.magnifier_size // (2 * self.magnifier_scale)
+        x1 = max(0, x - half_size)
+        y1 = max(0, y - half_size)
+        x2 = min(img_width, x + half_size)
+        y2 = min(img_height, y + half_size)
+
+        # 提取放大区域
+        roi = image[y1:y2, x1:x2].copy()
+        if roi.size == 0:
+            return
+
+        # 放大图像
+        roi = cv2.resize(roi, (self.magnifier_size, self.magnifier_size))
+        roi = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)
+
+        # 在放大的图像中心绘制十字线
+        center = self.magnifier_size // 2
+        cv2.line(roi, (center, 0), (center, self.magnifier_size), (255, 0, 0), 1)
+        cv2.line(roi, (0, center), (self.magnifier_size, center), (255, 0, 0), 1)
+
+        # 创建或更新放大镜窗口
+        if not hasattr(self, 'magnifier_window'):
+            self.magnifier_window = tk.Toplevel(self.root)
+            self.magnifier_window.overrideredirect(True)
+            self.magnifier_canvas = tk.Canvas(self.magnifier_window,
+                                           width=self.magnifier_size,
+                                           height=self.magnifier_size)
+            self.magnifier_canvas.pack()
+
+        # 更新放大镜位置
+        screen_x = self.root.winfo_rootx() + canvas.winfo_x() + event.x
+        screen_y = self.root.winfo_rooty() + canvas.winfo_y() + event.y
+        self.magnifier_window.geometry(f"{self.magnifier_size}x{self.magnifier_size}+{screen_x+20}+{screen_y+20}")
+
+        # 显示放大的图像
+        magnifier_image = ImageTk.PhotoImage(image=Image.fromarray(roi))
+        self.magnifier_canvas.create_image(0, 0, anchor=tk.NW, image=magnifier_image)
+        self.magnifier_canvas.image = magnifier_image  # 保持引用
 
 if __name__ == "__main__":
     root = tk.Tk()

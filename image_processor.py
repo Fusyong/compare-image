@@ -147,7 +147,7 @@ class ImageProcessor:
             return None
 
     def compare_images(self, left_image, right_image, left_markers, right_markers, mode="left"):
-        """比较两张图片的差异"""
+        """比较两张图片的差异，直接展示像素级的视觉差异"""
         try:
             # 预处理图像
             base_image, aligned_image = self.preprocess_images(
@@ -156,46 +156,17 @@ class ImageProcessor:
             if base_image is None or aligned_image is None:
                 return None
 
-            # 转换为灰度图进行处理
-            base_gray = cv2.cvtColor(base_image, cv2.COLOR_BGR2GRAY)
-            aligned_gray = cv2.cvtColor(aligned_image, cv2.COLOR_BGR2GRAY)
+            # 把两张图片按视觉敏感度转换为灰度图（越敏感的颜色越亮）
+            base_b, base_g, base_r = cv2.split(base_image)
+            aligned_b, aligned_g, aligned_r = cv2.split(aligned_image)
 
-            # 对图像进行轻微的高斯模糊，减少噪点但保留细节
-            base_gray = cv2.GaussianBlur(base_gray, (3, 3), 0)
-            aligned_gray = cv2.GaussianBlur(aligned_gray, (3, 3), 0)
+            # 使用视觉敏感度权重转换为灰度图
+            base_gray = 0.114*base_b + 0.587*base_g + 0.299*base_r
+            aligned_gray = 0.114*aligned_b + 0.587*aligned_g + 0.299*aligned_r
 
-            # 计算差异
+            # 计算两张图的差异，用差异生成灰度的结果图（白色表示相同，黑色表示不同）
             diff = cv2.absdiff(base_gray, aligned_gray)
-
-            # 使用Canny边缘检测来增强细线条的检测
-            base_edges = cv2.Canny(base_gray, 50, 150)
-            aligned_edges = cv2.Canny(aligned_gray, 50, 150)
-            edge_diff = cv2.absdiff(base_edges, aligned_edges)
-
-            # 合并普通差异和边缘差异
-            combined_diff = cv2.addWeighted(diff, 0.5, edge_diff, 0.5, 0)
-
-            # 使用较小的自适应阈值块大小，以更好地处理局部细节
-            mask = cv2.adaptiveThreshold(
-                combined_diff,
-                255,
-                cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                cv2.THRESH_BINARY_INV,
-                7,  # 7 较小的邻域大小，更敏感于局部变化
-                1   # 1 较小的常数差值，更敏感于细微差异
-            )
-
-            # 对掩码进行最小程度的形态学处理
-            kernel = np.ones((2, 2), np.uint8)  # 使用更小的核
-            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)  # 只进行开运算，去除极小的噪点
-
-            # 转回BGR格式
-            mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
-
-            # 将相同的区域设为白色，不同的区域保持原图
-            result = cv2.bitwise_and(base_image, mask)
-            white = np.ones_like(result) * 255
-            result = cv2.bitwise_or(result, cv2.bitwise_and(white, cv2.bitwise_not(mask)))
+            result = 255 - diff.astype(np.uint8)  # 反转差异值，使相同区域显示为白色
 
             return result
         except Exception as e:
