@@ -22,6 +22,7 @@ class ImageComparisonApp:
 
         # 比较状态
         self.is_comparing = False
+        self.compare_mode = "compare"  # "compare" 或 "overlay"
         self.left_result = None
         self.right_result = None
 
@@ -45,7 +46,23 @@ class ImageComparisonApp:
 
         ttk.Button(toolbar, text="加载左图", command=lambda: self.load_image("left")).pack(fill=tk.X, padx=5, pady=2)
         ttk.Button(toolbar, text="加载右图", command=lambda: self.load_image("right")).pack(fill=tk.X, padx=5, pady=2)
-        self.compare_button = ttk.Button(toolbar, text="比较图像", command=self.toggle_compare)
+
+        # 添加模式选择
+        mode_frame = ttk.Frame(toolbar)
+        mode_frame.pack(fill=tk.X, padx=5, pady=2)
+        self.mode_var = tk.StringVar(value="compare")
+        ttk.Radiobutton(mode_frame, text="比较模式", variable=self.mode_var, value="compare").pack(side=tk.LEFT)
+        ttk.Radiobutton(mode_frame, text="叠加模式", variable=self.mode_var, value="overlay").pack(side=tk.LEFT)
+
+        # 叠加模式的透明度控制
+        alpha_frame = ttk.Frame(toolbar)
+        alpha_frame.pack(fill=tk.X, padx=5, pady=2)
+        ttk.Label(alpha_frame, text="透明度:").pack(side=tk.LEFT)
+        self.alpha_scale = ttk.Scale(alpha_frame, from_=0, to=100, orient=tk.HORIZONTAL)
+        self.alpha_scale.set(50)  # 默认透明度0.5
+        self.alpha_scale.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        self.compare_button = ttk.Button(toolbar, text="开始比较", command=self.toggle_compare)
         self.compare_button.pack(fill=tk.X, padx=5, pady=2)
 
         # 坐标输入区域（移到左侧）
@@ -119,27 +136,42 @@ class ImageComparisonApp:
             return
 
         self.is_comparing = not self.is_comparing
+        mode = self.mode_var.get()
 
         if self.is_comparing:
             self.compare_button.configure(text="显示原图")
-            # 计算比较结果
-            self.left_result = self.processor.compare_images(
-                self.left_image, self.right_image,
-                self.left_markers, self.right_markers,
-                "left"
-            )
-            self.right_result = self.processor.compare_images(
-                self.left_image, self.right_image,
-                self.left_markers, self.right_markers,
-                "right"
-            )
-            # 显示比较结果
+            # 根据模式选择处理方法
+            if mode == "compare":
+                self.left_result = self.processor.compare_images(
+                    self.left_image, self.right_image,
+                    self.left_markers, self.right_markers,
+                    "left"
+                )
+                self.right_result = self.processor.compare_images(
+                    self.left_image, self.right_image,
+                    self.left_markers, self.right_markers,
+                    "right"
+                )
+            else:  # overlay mode
+                alpha = self.alpha_scale.get() / 100.0
+                self.left_result = self.processor.overlay_images(
+                    self.left_image, self.right_image,
+                    self.left_markers, self.right_markers,
+                    "left", alpha
+                )
+                self.right_result = self.processor.overlay_images(
+                    self.left_image, self.right_image,
+                    self.left_markers, self.right_markers,
+                    "right", alpha
+                )
+
+            # 显示结果
             if self.left_result is not None:
                 self.display_image(self.left_canvas, self.left_result, self.left_markers)
             if self.right_result is not None:
                 self.display_image(self.right_canvas, self.right_result, self.right_markers)
         else:
-            self.compare_button.configure(text="比较图像")
+            self.compare_button.configure(text="开始比较")
             # 显示原图
             if self.left_image is not None:
                 self.display_image(self.left_canvas, self.left_image, self.left_markers)
