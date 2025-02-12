@@ -10,6 +10,11 @@ class ImageComparisonApp:
         self.root = root
         self.root.title("图像比对工具")
 
+        # 设置窗口默认最大化
+        self.root.state('zoomed')  # Windows系统使用 'zoomed'
+        # 如果是在Linux/Mac系统上运行，请使用：
+        # self.root.attributes('-zoomed', True)
+
         # 初始化图像处理器
         self.processor = ImageProcessor()
         self.processor.set_info_callback(self.show_info)  # 设置信息显示回调
