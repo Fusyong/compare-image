@@ -1,9 +1,28 @@
+import json
 import cv2
 import numpy as np
+from rapidocr_onnxruntime import RapidOCR
+from PIL import Image, ImageDraw, ImageFont
 
 class ImageProcessor:
     def __init__(self):
-        pass
+        self.info_callback = None  # 用于显示信息的回调函数
+        # 添加缓存相关的属性
+        self.left_image_hash = None  # 左图像的哈希值
+        self.right_image_hash = None  # 右图像的哈希值
+        self.cached_left_result = None  # 缓存的左图OCR结果
+        self.cached_right_result = None  # 缓存的右图OCR结果
+
+    def set_info_callback(self, callback):
+        """设置信息显示回调函数"""
+        self.info_callback = callback
+
+    def show_info(self, message):
+        """显示信息"""
+        if self.info_callback:
+            self.info_callback(message)
+        else:
+            print(message)  # 如果没有设置回调函数，则使用print作为后备方案
 
     def get_distance(self, p1, p2):
         """计算两点之间的距离"""
@@ -102,7 +121,7 @@ class ImageProcessor:
 
             return base_image, aligned_image
         except Exception as e:
-            print(f"图像预处理出错: {str(e)}")
+            self.show_info(f"图像预处理出错: {str(e)}")
             return None, None
 
     def overlay_images(self, left_image, right_image, left_markers, right_markers, mode="left", alpha=0.5):
@@ -143,7 +162,7 @@ class ImageProcessor:
 
             return result
         except Exception as e:
-            print(f"图像叠加出错: {str(e)}")
+            self.show_info(f"图像叠加出错: {str(e)}")
             return None
 
     def compare_images(self, left_image, right_image, left_markers, right_markers, mode="left"):
@@ -170,5 +189,233 @@ class ImageProcessor:
 
             return result
         except Exception as e:
-            print(f"图像处理出错: {str(e)}")
+            self.show_info(f"图像处理出错: {str(e)}")
             return None
+
+    def calculate_image_hash(self, image):
+        """计算图像的哈希值用于判断图像是否改变"""
+        return hash(image.tobytes())
+
+    def need_ocr(self, image, side="left"):
+        """判断是否需要重新进行OCR"""
+        current_hash = self.calculate_image_hash(image)
+        if side == "left":
+            if current_hash != self.left_image_hash:
+                self.left_image_hash = current_hash
+                return True
+        else:
+            if current_hash != self.right_image_hash:
+                self.right_image_hash = current_hash
+                return True
+        return False
+
+    def ocr_and_compare(self, left_image, right_image, left_markers, right_markers, mode="left"):
+        """OCR两张图片并比较差异，返回标记了差异的图片"""
+
+        # 如果是完全相同的图像，直接返回原图
+        if left_image.shape == right_image.shape and np.array_equal(left_image, right_image):
+            self.show_info("两侧图像相同")
+            return left_image if mode == "left" else right_image
+
+        try:
+            # 初始化OCR引擎
+            engine = RapidOCR()
+
+            # 检查是否需要重新OCR
+            if self.need_ocr(left_image, "left"):
+                self.show_info("正在OCR左图...")
+                left_result, _ = engine(left_image, return_word_box=True)
+                if left_result:
+                    self.cached_left_result = left_result
+                    with open("left_result.json", "w", encoding='utf-8') as f:
+                        json.dump(left_result, f, ensure_ascii=False, indent=2)
+                else:
+                    self.show_info("左图OCR识别失败")
+                    return None
+            else:
+                left_result = self.cached_left_result
+                self.show_info("使用左图缓存的OCR结果")
+
+            if self.need_ocr(right_image, "right"):
+                self.show_info("正在OCR右图...")
+                right_result, _ = engine(right_image, return_word_box=True)
+                if right_result:
+                    self.cached_right_result = right_result
+                    with open("right_result.json", "w", encoding='utf-8') as f:
+                        json.dump(right_result, f, ensure_ascii=False, indent=2)
+                else:
+                    self.show_info("右图OCR识别失败")
+                    return None
+            else:
+                right_result = self.cached_right_result
+                self.show_info("使用右图缓存的OCR结果")
+
+            # 获取对齐后的图像用于显示结果
+            base_image, aligned_image = self.preprocess_images(
+                left_image, right_image, left_markers, right_markers, mode
+            )
+            if base_image is None or aligned_image is None:
+                self.show_info("图像对齐失败")
+                return None
+
+            # 创建结果图像
+            result = base_image.copy()
+
+            # 计算变换参数
+            src_points = self.normalize_coordinates(
+                right_markers if mode == "left" else left_markers,
+                right_image.shape if mode == "left" else left_image.shape
+            )
+            dst_points = self.normalize_coordinates(
+                left_markers if mode == "left" else right_markers,
+                left_image.shape if mode == "left" else right_image.shape
+            )
+
+            # 计算缩放比例
+            src_dist = self.get_distance(src_points[0], src_points[1])
+            dst_dist = self.get_distance(dst_points[0], dst_points[1])
+            scale = dst_dist / src_dist
+
+            # 计算平移量
+            dx = dst_points[0][0] - src_points[0][0] * scale
+            dy = dst_points[0][1] - src_points[0][1] * scale
+
+            # 用于存储已匹配的文本框
+            matched_boxes_left = set()
+            matched_boxes_right = set()
+            has_difference = False
+
+            # 首先尝试通过文本内容匹配
+            text_to_boxes_right = {}
+            for i, item in enumerate(right_result):
+                text = item[1]
+                if text not in text_to_boxes_right:
+                    text_to_boxes_right[text] = []
+                text_to_boxes_right[text].append((i, item[0]))
+
+            # 遍历左侧图像中的每个文本框
+            for i, left_item in enumerate(left_result):
+                left_box = left_item[0]  # 文本框坐标
+                left_text = left_item[1]  # 文本内容
+
+                found_match = False
+                # 先查找相同文本的候选框
+                if left_text in text_to_boxes_right:
+                    candidates = text_to_boxes_right[left_text]
+                    best_overlap = 0
+                    best_match = None
+
+                    for j, right_box in candidates:
+                        if j in matched_boxes_right:
+                            continue
+
+                        # 变换右侧文本框坐标
+                        transformed_box = []
+                        for x, y in right_box:
+                            # 应用缩放和平移变换
+                            tx = x * scale + dx
+                            ty = y * scale + dy
+                            transformed_box.append([tx, ty])
+
+                        # 计算重叠度
+                        overlap_ratio = self.calculate_overlap_ratio(left_box, transformed_box)
+
+                        # 记录最佳匹配
+                        if overlap_ratio > best_overlap:
+                            best_overlap = overlap_ratio
+                            best_match = (j, transformed_box)
+
+                    # 如果找到足够好的匹配
+                    if best_match and best_overlap > 0.3:  # 降低阈值以适应坐标变换的误差
+                        found_match = True
+                        matched_boxes_left.add(i)
+                        matched_boxes_right.add(best_match[0])
+
+                # 如果没有找到匹配，在左侧图像上标记差异
+                if not found_match and mode == "left":
+                    has_difference = True
+                    # 将文本框坐标转换为整数
+                    box = np.array(left_box, dtype=np.int32).reshape((-1, 2))
+                    # 绘制半透明黄色边框
+                    cv2.polylines(result, [box], True, (0, 255, 255), 2)
+                    # 在文本框上方添加文字标记（使用宋体6号字，约10.5pt或14px）
+                    text_pos = (int(min(p[0] for p in left_box)), int(min(p[1] for p in left_box)) - 5)
+                    # 创建宋体字体
+                    font_path = "C:/Windows/Fonts/simsun.ttc"  # 宋体字体路径
+                    font_size = 14
+                    img_pil = Image.fromarray(result)
+                    draw = ImageDraw.Draw(img_pil)
+                    font = ImageFont.truetype(font_path, font_size)
+                    # 绘制灰色文字
+                    draw.text(text_pos, left_text, font=font, fill=(128, 128, 128))
+                    # 转换回OpenCV格式
+                    result = np.array(img_pil)
+
+            # 标记右侧图像中未匹配的文本框
+            if mode == "right":
+                for j, right_item in enumerate(right_result):
+                    if j not in matched_boxes_right:
+                        has_difference = True
+                        right_box = right_item[0]
+                        right_text = right_item[1]
+
+                        # 变换文本框坐标
+                        transformed_box = []
+                        for x, y in right_box:
+                            # 应用缩放和平移变换
+                            tx = x * scale + dx
+                            ty = y * scale + dy
+                            transformed_box.append([tx, ty])
+
+                        # 将文本框坐标转换为整数
+                        box = np.array(transformed_box, dtype=np.int32).reshape((-1, 2))
+                        # 绘制半透明黄色边框
+                        cv2.polylines(result, [box], True, (0, 255, 255), 2)
+                        # 在文本框上方添加文字标记
+                        text_pos = (int(min(p[0] for p in transformed_box)), int(min(p[1] for p in transformed_box)) - 5)
+                        # 使用PIL绘制灰色文字
+                        img_pil = Image.fromarray(result)
+                        draw = ImageDraw.Draw(img_pil)
+                        font = ImageFont.truetype(font_path, font_size)
+                        draw.text(text_pos, right_text, font=font, fill=(128, 128, 128))
+                        result = np.array(img_pil)
+
+            if not has_difference:
+                self.show_info("OCR结果相同")
+
+            return result
+        except Exception as e:
+            self.show_info(f"OCR比较出错: {str(e)}")
+            return None
+
+    def calculate_overlap_ratio(self, box1, box2):
+        """计算两个文本框的重叠比例"""
+        try:
+            # 将文本框坐标转换为numpy数组
+            box1 = np.array(box1, dtype=np.int32).reshape((-1, 2))
+            box2 = np.array(box2, dtype=np.int32).reshape((-1, 2))
+
+            # 创建掩码图像
+            mask1 = np.zeros((1000, 1000), dtype=np.uint8)
+            mask2 = np.zeros((1000, 1000), dtype=np.uint8)
+
+            # 在掩码上填充文本框
+            cv2.fillPoly(mask1, [box1], (1))
+            cv2.fillPoly(mask2, [box2], (1))
+
+            # 计算交集面积
+            intersection = cv2.bitwise_and(mask1, mask2)
+            intersection_area = cv2.countNonZero(intersection)
+
+            # 计算并集面积
+            union = cv2.bitwise_or(mask1, mask2)
+            union_area = cv2.countNonZero(union)
+
+            # 计算重叠比例
+            if union_area == 0:
+                return 0
+            return intersection_area / union_area
+        except Exception as e:
+            self.show_info(f"计算重叠比例出错: {str(e)}")
+            return 0
+

@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, filedialog
+from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageTk
 import cv2
 import numpy as np
@@ -12,6 +12,7 @@ class ImageComparisonApp:
 
         # 初始化图像处理器
         self.processor = ImageProcessor()
+        self.processor.set_info_callback(self.show_info)  # 设置信息显示回调
 
         # 图像数据
         self.left_image = None
@@ -58,8 +59,9 @@ class ImageComparisonApp:
         mode_frame = ttk.Frame(toolbar)
         mode_frame.pack(fill=tk.X, padx=5, pady=2)
         self.mode_var = tk.StringVar(value="compare")
-        ttk.Radiobutton(mode_frame, text="比较模式", variable=self.mode_var, value="compare").pack(side=tk.LEFT)
+        ttk.Radiobutton(mode_frame, text="像素比较", variable=self.mode_var, value="compare").pack(side=tk.LEFT)
         ttk.Radiobutton(mode_frame, text="叠加模式", variable=self.mode_var, value="overlay").pack(side=tk.LEFT)
+        ttk.Radiobutton(mode_frame, text="OCR比较", variable=self.mode_var, value="ocr").pack(side=tk.LEFT)
 
         # 叠加模式的透明度控制
         alpha_frame = ttk.Frame(toolbar)
@@ -71,6 +73,12 @@ class ImageComparisonApp:
 
         self.compare_button = ttk.Button(toolbar, text="开始比较", command=self.toggle_compare)
         self.compare_button.pack(fill=tk.X, padx=5, pady=2)
+
+        # 添加提示信息区域到工具栏
+        info_frame = ttk.LabelFrame(toolbar, text="提示信息")
+        info_frame.pack(fill=tk.X, padx=5, pady=2)
+        self.info_label = ttk.Label(info_frame, text="", wraplength=200)
+        self.info_label.pack(fill=tk.X, padx=5, pady=2)
 
         # 坐标输入区域（移到左侧）
         coords_frame = ttk.LabelFrame(left_panel, text="标记点坐标")
@@ -137,17 +145,35 @@ class ImageComparisonApp:
         self.right_canvas.bind("<B1-Motion>", lambda e: self.drag(e, "right"))
         self.right_canvas.bind("<ButtonRelease-1>", self.end_drag)
 
+    def show_info(self, message):
+        """显示提示信息"""
+        self.info_label.config(text=message)
+        self.root.update()
+
     def toggle_compare(self):
-        """切换比较/原图显示状态"""
+        """切换比较状态"""
         if self.left_image is None or self.right_image is None:
+            self.show_info("请先加载左右两张图片")
             return
 
-        self.is_comparing = not self.is_comparing
-        mode = self.mode_var.get()
+        if not self.is_comparing:
+            self.is_comparing = True
+            self.compare_button.configure(text="停止比较")
 
-        if self.is_comparing:
-            self.compare_button.configure(text="显示原图")
-            # 根据模式选择处理方法
+            # 显示OCR进行中的提示
+            self.show_info("正在OCR识别...")
+
+            # 开始比较
+            self.start_comparison()
+        else:
+            self.is_comparing = False
+            self.compare_button.configure(text="开始比较")
+            self.show_info("")  # 清空提示信息
+
+    def start_comparison(self):
+        """开始图像比较"""
+        try:
+            mode = self.mode_var.get()
             if mode == "compare":
                 self.left_result = self.processor.compare_images(
                     self.left_image, self.right_image,
@@ -159,7 +185,7 @@ class ImageComparisonApp:
                     self.left_markers, self.right_markers,
                     "right"
                 )
-            else:  # overlay mode
+            elif mode == "overlay":
                 alpha = self.alpha_scale.get() / 100.0
                 self.left_result = self.processor.overlay_images(
                     self.left_image, self.right_image,
@@ -171,19 +197,38 @@ class ImageComparisonApp:
                     self.left_markers, self.right_markers,
                     "right", alpha
                 )
+            else:  # ocr mode
+                self.left_result = self.processor.ocr_and_compare(
+                    self.left_image, self.right_image,
+                    self.left_markers, self.right_markers,
+                    "left"
+                )
+                self.right_result = self.processor.ocr_and_compare(
+                    self.left_image, self.right_image,
+                    self.left_markers, self.right_markers,
+                    "right"
+                )
 
             # 显示结果
             if self.left_result is not None:
                 self.display_image(self.left_canvas, self.left_result, self.left_markers)
             if self.right_result is not None:
                 self.display_image(self.right_canvas, self.right_result, self.right_markers)
-        else:
-            self.compare_button.configure(text="开始比较")
-            # 显示原图
-            if self.left_image is not None:
-                self.display_image(self.left_canvas, self.left_image, self.left_markers)
-            if self.right_image is not None:
-                self.display_image(self.right_canvas, self.right_image, self.right_markers)
+
+            # 根据比较结果更新提示信息
+            if self.left_result is None:
+                self.show_info("OCR识别失败")
+            else:
+                # 检查是否有差异（通过检查图像是否被修改）
+                if np.array_equal(self.left_result, self.left_image if mode == "left" else self.right_image):
+                    self.show_info("OCR结果相同")
+                else:
+                    self.show_info("已标记出差异区域")
+        except Exception as e:
+            self.show_info(f"比较出错: {str(e)}")
+            messagebox.showerror("错误", str(e))
+            self.is_comparing = False
+            self.compare_button.config(text="开始比较")
 
     def load_image(self, side):
         file_path = filedialog.askopenfilename(
@@ -194,14 +239,17 @@ class ImageComparisonApp:
 
         image = cv2.imread(file_path)
         if image is None:
+            self.show_info(f"无法加载图片: {file_path}")
             return
 
         if side == "left":
             self.left_image = image
             self.left_result = None  # 清除之前的比较结果
+            self.show_info("已加载左图")
         else:
             self.right_image = image
             self.right_result = None  # 清除之前的比较结果
+            self.show_info("已加载右图")
 
         # 如果正在比较状态，切换回原图状态
         if self.is_comparing:
