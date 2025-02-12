@@ -218,15 +218,19 @@ class ImageComparisonApp:
             # 根据比较结果更新提示信息
             if self.left_result is None:
                 self.show_info("OCR识别失败")
+                print("OCR识别失败")
             else:
                 # 检查是否有差异（通过检查图像是否被修改）
                 if np.array_equal(self.left_result, self.left_image if mode == "left" else self.right_image):
                     self.show_info("OCR结果相同")
+                    print("OCR结果相同")
                 else:
                     self.show_info("已标记出差异区域")
+
         except Exception as e:
+            print(e)
             self.show_info(f"比较出错: {str(e)}")
-            messagebox.showerror("错误", str(e))
+            print(e)
             self.is_comparing = False
             self.compare_button.config(text="开始比较")
 
