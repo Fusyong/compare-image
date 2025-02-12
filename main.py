@@ -52,37 +52,15 @@ class ImageComparisonApp:
         toolbar = ttk.LabelFrame(left_panel, text="操作")
         toolbar.pack(fill=tk.X, pady=5)
 
-        ttk.Button(toolbar, text="加载左图", command=lambda: self.load_image("left")).pack(fill=tk.X, padx=5, pady=2)
-        ttk.Button(toolbar, text="加载右图", command=lambda: self.load_image("right")).pack(fill=tk.X, padx=5, pady=2)
+        # 创建一个Frame来容纳两个按钮
+        buttons_frame = ttk.Frame(toolbar)
+        buttons_frame.pack(fill=tk.X, padx=5, pady=2)
+        ttk.Button(buttons_frame, text="加载左图", command=lambda: self.load_image("left")).pack(side=tk.LEFT, expand=True, padx=(0,2))
+        ttk.Button(buttons_frame, text="加载右图", command=lambda: self.load_image("right")).pack(side=tk.LEFT, expand=True, padx=(2,0))
 
-        # 添加模式选择
-        mode_frame = ttk.Frame(toolbar)
-        mode_frame.pack(fill=tk.X, padx=5, pady=2)
-        self.mode_var = tk.StringVar(value="compare")
-        ttk.Radiobutton(mode_frame, text="像素比较", variable=self.mode_var, value="compare").pack(side=tk.LEFT)
-        ttk.Radiobutton(mode_frame, text="叠加模式", variable=self.mode_var, value="overlay").pack(side=tk.LEFT)
-        ttk.Radiobutton(mode_frame, text="OCR比较", variable=self.mode_var, value="ocr").pack(side=tk.LEFT)
-
-        # 叠加模式的透明度控制
-        alpha_frame = ttk.Frame(toolbar)
-        alpha_frame.pack(fill=tk.X, padx=5, pady=2)
-        ttk.Label(alpha_frame, text="透明度:").pack(side=tk.LEFT)
-        self.alpha_scale = ttk.Scale(alpha_frame, from_=0, to=100, orient=tk.HORIZONTAL)
-        self.alpha_scale.set(50)  # 默认透明度0.5
-        self.alpha_scale.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        self.compare_button = ttk.Button(toolbar, text="开始比较", command=self.toggle_compare)
-        self.compare_button.pack(fill=tk.X, padx=5, pady=2)
-
-        # 添加提示信息区域到工具栏
-        info_frame = ttk.LabelFrame(toolbar, text="提示信息")
-        info_frame.pack(fill=tk.X, padx=5, pady=2)
-        self.info_label = ttk.Label(info_frame, text="", wraplength=200)
-        self.info_label.pack(fill=tk.X, padx=5, pady=2)
-
-        # 坐标输入区域（移到左侧）
-        coords_frame = ttk.LabelFrame(left_panel, text="标记点坐标")
-        coords_frame.pack(fill=tk.X, pady=5)
+        # 坐标输入区域 - 移动到这里，放在按钮下方
+        coords_frame = ttk.LabelFrame(toolbar, text="校准点坐标")
+        coords_frame.pack(fill=tk.X, padx=5, pady=2)
 
         # 左图坐标
         left_coords = ttk.Frame(coords_frame)
@@ -125,6 +103,31 @@ class ImageComparisonApp:
         self.r2_x.pack(side=tk.LEFT)
         self.r2_y = ttk.Entry(r2_frame, width=5)
         self.r2_y.pack(side=tk.LEFT)
+
+        # 添加模式选择 - 移到坐标输入区域后面
+        mode_frame = ttk.Frame(toolbar)
+        mode_frame.pack(fill=tk.X, padx=5, pady=2)
+        self.mode_var = tk.StringVar(value="compare")
+        ttk.Radiobutton(mode_frame, text="像素比较", variable=self.mode_var, value="compare").pack(side=tk.LEFT)
+        ttk.Radiobutton(mode_frame, text="叠加模式", variable=self.mode_var, value="overlay").pack(side=tk.LEFT)
+        ttk.Radiobutton(mode_frame, text="OCR比较", variable=self.mode_var, value="ocr").pack(side=tk.LEFT)
+
+        # 叠加模式的透明度控制
+        alpha_frame = ttk.Frame(toolbar)
+        alpha_frame.pack(fill=tk.X, padx=5, pady=2)
+        ttk.Label(alpha_frame, text="叠加透明度:").pack(side=tk.LEFT)
+        self.alpha_scale = ttk.Scale(alpha_frame, from_=0, to=100, orient=tk.HORIZONTAL)
+        self.alpha_scale.set(50)  # 默认透明度0.5
+        self.alpha_scale.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        self.compare_button = ttk.Button(toolbar, text="开始比较", command=self.toggle_compare)
+        self.compare_button.pack(fill=tk.X, padx=5, pady=2)
+
+        # 添加提示信息区域到工具栏
+        info_frame = ttk.LabelFrame(toolbar, text="提示信息")
+        info_frame.pack(fill=tk.X, padx=5, pady=2)
+        self.info_label = ttk.Label(info_frame, text="", wraplength=200)
+        self.info_label.pack(fill=tk.X, padx=5, pady=2)
 
         # 图像显示区域（在右侧面板）
         image_frame = ttk.Frame(right_panel)
@@ -221,7 +224,7 @@ class ImageComparisonApp:
                 print("OCR识别失败")
             else:
                 # 检查是否有差异（通过检查图像是否被修改）
-                if np.array_equal(self.left_result, self.left_image if mode == "left" else self.right_image):
+                if np.array_equal(self.left_result, self.left_image if mode == "left" else self.right_image):  # type: ignore
                     self.show_info("OCR结果相同")
                     print("OCR结果相同")
                 else:
@@ -241,7 +244,7 @@ class ImageComparisonApp:
         if not file_path:
             return
 
-        image = cv2.imread(file_path)
+        image = cv2.imread(file_path)  # pylint: disable=no-member
         if image is None:
             self.show_info(f"无法加载图片: {file_path}")
             return
@@ -275,16 +278,19 @@ class ImageComparisonApp:
             canvas_width = 400
             canvas_height = 300
 
-        image = cv2.resize(image, (canvas_width, canvas_height))
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = cv2.resize(image, (canvas_width, canvas_height))  # pylint: disable=no-member
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # pylint: disable=no-member
 
         # 绘制标记点
         for i, (x, y) in enumerate(markers):
             x = int(x * canvas_width / 100)
             y = int(y * canvas_height / 100)
-            cv2.drawMarker(image, (x, y), (255, 0, 0), cv2.MARKER_CROSS, 20, 2)
-            cv2.putText(image, f"{'L' if canvas == self.left_canvas else 'R'}{i+1}",
-                       (x+5, y-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
+            cv2.drawMarker(image, (x, y), (255, 0, 0), cv2.MARKER_CROSS, 20, 2)  # pylint: disable=no-member
+            cv2.putText(image, # pylint: disable=no-member
+                        f"{'L' if canvas == self.left_canvas else 'R'}{i+1}",
+                       (x+5, y-5),
+                       cv2.FONT_HERSHEY_SIMPLEX, # pylint: disable=no-member
+                       0.5, (255, 0, 0), 1)
 
         # 显示图像
         photo = ImageTk.PhotoImage(image=Image.fromarray(image))
@@ -398,13 +404,13 @@ class ImageComparisonApp:
             return
 
         # 放大图像
-        roi = cv2.resize(roi, (self.magnifier_size, self.magnifier_size))
-        roi = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)
+        roi = cv2.resize(roi, (self.magnifier_size, self.magnifier_size))  # pylint: disable=no-member
+        roi = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)  # pylint: disable=no-member
 
         # 在放大的图像中心绘制十字线
         center = self.magnifier_size // 2
-        cv2.line(roi, (center, 0), (center, self.magnifier_size), (255, 0, 0), 1)
-        cv2.line(roi, (0, center), (self.magnifier_size, center), (255, 0, 0), 1)
+        cv2.line(roi, (center, 0), (center, self.magnifier_size), (255, 0, 0), 1)  # pylint: disable=no-member
+        cv2.line(roi, (0, center), (self.magnifier_size, center), (255, 0, 0), 1)  # pylint: disable=no-member
 
         # 创建或更新放大镜窗口
         if not hasattr(self, 'magnifier_window'):
@@ -423,7 +429,7 @@ class ImageComparisonApp:
         # 显示放大的图像
         magnifier_image = ImageTk.PhotoImage(image=Image.fromarray(roi))
         self.magnifier_canvas.create_image(0, 0, anchor=tk.NW, image=magnifier_image)
-        self.magnifier_canvas.image = magnifier_image  # 保持引用
+        self.magnifier_canvas.image = magnifier_image  # type: ignore
 
 if __name__ == "__main__":
     root = tk.Tk()

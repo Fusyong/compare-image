@@ -43,7 +43,7 @@ class ImageProcessor:
         new_height = int(height * scale)
 
         # 缩放图像
-        scaled_image = cv2.resize(image, (new_width, new_height))  # type: ignore
+        scaled_image = cv2.resize(image, (new_width, new_height))  # pylint: disable=no-member
 
         # 计算缩放后的点坐标
         scaled_points = []
@@ -68,7 +68,7 @@ class ImageProcessor:
 
     def transform_image(self, image, matrix, target_size):
         """应用变换矩阵到图像"""
-        return cv2.warpAffine(image, matrix, target_size)  # type: ignore
+        return cv2.warpAffine(image, matrix, target_size)  # pylint: disable=no-member
 
     def normalize_coordinates(self, markers, image_shape):
         """将相对坐标（百分比）转换为绝对坐标"""
@@ -139,13 +139,13 @@ class ImageProcessor:
 
             # 处理moving_image的白色区域
             # 转换为灰度图
-            gray = cv2.cvtColor(aligned_image, cv2.COLOR_BGR2GRAY)  # type: ignore
+            gray = cv2.cvtColor(aligned_image, cv2.COLOR_BGR2GRAY)  # pylint: disable=no-member
 
             # 创建白色区域的掩码
-            _, white_mask = cv2.threshold(gray, 250, 255, cv2.THRESH_BINARY)  # type: ignore
+            _, white_mask = cv2.threshold(gray, 250, 255, cv2.THRESH_BINARY)  # pylint: disable=no-member
 
             # 对掩码进行平滑处理
-            white_mask = cv2.GaussianBlur(white_mask, (5, 5), 0)  # type: ignore
+            white_mask = cv2.GaussianBlur(white_mask, (5, 5), 0)  # pylint: disable=no-member
 
             # 将掩码转换为0-1范围的浮点数
             white_mask = white_mask.astype(float) / 255.0
@@ -180,15 +180,15 @@ class ImageProcessor:
                 return None
 
             # 把两张图片按视觉敏感度转换为灰度图（越敏感的颜色越亮）
-            base_b, base_g, base_r = cv2.split(base_image)  # type: ignore
-            aligned_b, aligned_g, aligned_r = cv2.split(aligned_image)  # type: ignore
+            base_b, base_g, base_r = cv2.split(base_image)  # pylint: disable=no-member
+            aligned_b, aligned_g, aligned_r = cv2.split(aligned_image)  # pylint: disable=no-member
 
             # 使用视觉敏感度权重转换为灰度图
             base_gray = 0.114*base_b + 0.587*base_g + 0.299*base_r
             aligned_gray = 0.114*aligned_b + 0.587*aligned_g + 0.299*aligned_r
 
             # 计算两张图的差异，用差异生成灰度的结果图（白色表示相同，黑色表示不同）
-            diff = cv2.absdiff(base_gray, aligned_gray)  # type: ignore
+            diff = cv2.absdiff(base_gray, aligned_gray)  # pylint: disable=no-member
             result = 255 - diff.astype(np.uint8)  # 反转差异值，使相同区域显示为白色
 
             return result
@@ -234,15 +234,15 @@ class ImageProcessor:
             scaled_box = np.array([[p[0] * scale + dx, p[1] * scale + dy] for p in counter_item[0]])
             scaled_counter_result.append((text, scaled_box))
 
-        # 将ndarray转换为列表以便JSON序列化
-        json_data = []
-        for text, box in scaled_counter_result:
-            json_data.append({
-                "text": text,
-                "box": box.tolist()  # 将ndarray转换为列表
-            })
-        with open("scaled_counter_result.json", "w", encoding='utf-8') as f:
-            json.dump(json_data, f, ensure_ascii=False, indent=2)
+        # # 将ndarray转换为列表以便JSON序列化
+        # json_data = []
+        # for text, box in scaled_counter_result:
+        #     json_data.append({
+        #         "text": text,
+        #         "box": box.tolist()  # 将ndarray转换为列表
+        #     })
+        # with open("scaled_counter_result.json", "w", encoding='utf-8') as f:
+        #     json.dump(json_data, f, ensure_ascii=False, indent=2)
 
         # 遍历基准图OCR结果，检查是否存在匹配的文本框
         for item in base_result:
@@ -276,8 +276,8 @@ class ImageProcessor:
                 left_result, _ = engine(left_image, return_word_box=True)
                 if left_result:
                     self.cached_left_result = left_result
-                    with open("left_result.json", "w", encoding='utf-8') as f:
-                        json.dump(left_result, f, ensure_ascii=False, indent=2)
+                    # with open("left_result.json", "w", encoding='utf-8') as f:
+                    #     json.dump(left_result, f, ensure_ascii=False, indent=2)
                 else:
                     self.show_info("左图OCR识别失败")
                     return None
@@ -290,8 +290,8 @@ class ImageProcessor:
                 right_result, _ = engine(right_image, return_word_box=True)
                 if right_result:
                     self.cached_right_result = right_result
-                    with open("right_result.json", "w", encoding='utf-8') as f:
-                        json.dump(right_result, f, ensure_ascii=False, indent=2)
+                    # with open("right_result.json", "w", encoding='utf-8') as f:
+                    #     json.dump(right_result, f, ensure_ascii=False, indent=2)
                 else:
                     self.show_info("右图OCR识别失败")
                     return None
@@ -330,6 +330,7 @@ class ImageProcessor:
             dy = dst_points[0][1] - src_points[0][1] * scale
 
             # 比较OCR结果
+            self.show_info("比较OCR结果...")
             unmatched = self.compare_ocr_results(
                 left_result if mode == "left" else right_result,
                 right_result if mode == "left" else left_result,
@@ -344,16 +345,16 @@ class ImageProcessor:
                 for box, text, *_ in unmatched:
                     # 将文本框坐标转换为整数
                     box = np.array(box, dtype=np.int32).reshape((-1, 2))
-                    # 绘制半透明黄色边框
-                    cv2.polylines(result, [box], True, (0, 255, 255), 2)  # type: ignore
-                    # 在文本框上方添加文字标记
-                    text_pos = (int(min(p[0] for p in box)), int(min(p[1] for p in box)) - 5)
-                    # 使用PIL绘制灰色文字
-                    img_pil = Image.fromarray(result)
-                    draw = ImageDraw.Draw(img_pil)
-                    font = ImageFont.truetype("C:/Windows/Fonts/simsun.ttc", 14)
-                    draw.text(text_pos, text, font=font, fill=(128, 128, 128))
-                    result = np.array(img_pil)
+                    # 绘制红色细线边框
+                    cv2.polylines(result, [box], True, (0, 0, 255), 1)  # pylint: disable=no-member
+                    # # 在文本框上方添加文字标记
+                    # text_pos = (int(min(p[0] for p in box)), int(min(p[1] for p in box)) - 5)
+                    # # 使用PIL绘制灰色文字
+                    # img_pil = Image.fromarray(result)
+                    # draw = ImageDraw.Draw(img_pil)
+                    # font = ImageFont.truetype("C:/Windows/Fonts/simsun.ttc", 9)
+                    # draw.text(text_pos, text, font=font, fill=(128, 128, 128))
+                    # result = np.array(img_pil)
 
             if not has_difference:
                 self.show_info("OCR结果相同")
@@ -372,11 +373,11 @@ class ImageProcessor:
             poly2 = np.array(box2, dtype=np.float32).reshape((-1, 2))
 
             # 计算各自的面积
-            area1 = cv2.contourArea(poly1)  # type: ignore
-            area2 = cv2.contourArea(poly2)  # type: ignore
+            area1 = cv2.contourArea(poly1)  # pylint: disable=no-member
+            area2 = cv2.contourArea(poly2)  # pylint: disable=no-member
 
             # 计算两个凸多边形的交集面积
-            retval, intersection = cv2.intersectConvexConvex(poly1, poly2)  # type: ignore
+            retval, intersection = cv2.intersectConvexConvex(poly1, poly2)  # pylint: disable=no-member
             intersection_area = retval
 
             # 计算并集面积
