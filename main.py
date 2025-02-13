@@ -1,8 +1,10 @@
+import difflib
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageTk
 import cv2
 import numpy as np
+import webbrowser  # 新增：用于自动打开HTML报告文件
 from image_processor import ImageProcessor
 
 class ImageComparisonApp:
@@ -234,6 +236,43 @@ class ImageComparisonApp:
                     print("OCR结果相同")
                 else:
                     self.show_info("已标记出差异区域")
+
+            # ----------------- 新增OCR文本比较功能 -----------------
+            if mode == "ocr":
+                # 使用缓存的OCR结果，而不是处理后返回的图像
+                if self.processor.cached_left_result is not None and self.processor.cached_right_result is not None:
+                    base_text = "\n".join([item[1] for item in self.processor.cached_left_result])
+                    compare_text = "\n".join([item[1] for item in self.processor.cached_right_result])
+                else:
+                    base_text = ""
+                    compare_text = ""
+
+                # 可选做法1：使用 unified_diff 生成纯文本差异
+                diff_lines = list(difflib.unified_diff(
+                    base_text.splitlines(),
+                    compare_text.splitlines(),
+                    fromfile='Base OCR Text',
+                    tofile='Compare OCR Text',
+                    lineterm=''
+                ))
+                diff_text = "\n".join(diff_lines)
+                if diff_text:
+                    self.show_info("OCR文本纯文本差异：\n" + diff_text)
+                else:
+                    self.show_info("OCR文本无纯文本差异")
+
+                # 可选做法2：使用 HtmlDiff 生成HTML格式的差异报告，更直观
+                html_diff = difflib.HtmlDiff().make_file(
+                    base_text.splitlines(),
+                    compare_text.splitlines(),
+                    fromdesc='Base OCR Text',
+                    todesc='Compare OCR Text'
+                )
+                with open('ocr_diff.html', 'w', encoding='utf-8') as f:
+                    f.write(html_diff)
+                self.show_info("OCR文本差异HTML文件已生成：ocr_diff.html")
+                webbrowser.open('ocr_diff.html')  # 新增：自动打开生成的HTML报告文件
+            # ----------------- OCR文本比较功能结束 -----------------
 
         except Exception as e:
             print(e)

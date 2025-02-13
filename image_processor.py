@@ -1,6 +1,7 @@
 import json
 import cv2  # type: ignore
 import numpy as np
+import difflib  # 新增：引入 difflib 模块，用于文本比较
 from rapidocr_onnxruntime import RapidOCR
 from PIL import Image, ImageDraw, ImageFont
 
@@ -298,6 +299,28 @@ class ImageProcessor:
             else:
                 right_result = self.cached_right_result
                 self.show_info("使用右图缓存的OCR结果")
+
+            # ----------------- 新增OCR文本比较功能 -----------------
+            # 根据 mode 确定基准OCR文本和对比OCR文本
+            if mode == "left":
+                base_text = "\n".join([item[1] for item in left_result])
+                compare_text = "\n".join([item[1] for item in right_result])
+            else:
+                base_text = "\n".join([item[1] for item in right_result])
+                compare_text = "\n".join([item[1] for item in left_result])
+            diff_lines = list(difflib.unified_diff(
+                base_text.splitlines(),
+                compare_text.splitlines(),
+                fromfile='Base OCR Text',
+                tofile='Compare OCR Text',
+                lineterm=''
+            ))
+            diff_text = "\n".join(diff_lines)
+            if diff_text:
+                self.show_info("OCR文本差异：\n" + diff_text)
+            else:
+                self.show_info("OCR文本无差异")
+            # ----------------- OCR文本比较功能结束 -----------------
 
             # 获取对齐后的图像用于显示结果
             base_image, aligned_image = self.preprocess_images(
