@@ -1,5 +1,11 @@
+"""多个比较模式
+1. 像素比较
+2. 叠置比较
+3. OCR文字比较
+"""
 import json
 import cv2  # type: ignore
+import webbrowser  # 新增：用于自动打开HTML报告文件
 import numpy as np
 import difflib  # 新增：引入 difflib 模块，用于文本比较
 from rapidocr_onnxruntime import RapidOCR
@@ -301,13 +307,15 @@ class ImageProcessor:
                 self.show_info("使用右图缓存的OCR结果")
 
             # ----------------- 新增OCR文本比较功能 -----------------
-            # 根据 mode 确定基准OCR文本和对比OCR文本
-            if mode == "left":
-                base_text = "\n".join([item[1] for item in left_result])
-                compare_text = "\n".join([item[1] for item in right_result])
+            # 使用缓存的OCR结果，而不是处理后返回的图像
+            if self.cached_left_result is not None and self.cached_right_result is not None:
+                base_text = "\n".join([item[1] for item in self.cached_left_result])
+                compare_text = "\n".join([item[1] for item in self.cached_right_result])
             else:
-                base_text = "\n".join([item[1] for item in right_result])
-                compare_text = "\n".join([item[1] for item in left_result])
+                base_text = ""
+                compare_text = ""
+
+            # 可选做法1：使用 unified_diff 生成纯文本差异
             diff_lines = list(difflib.unified_diff(
                 base_text.splitlines(),
                 compare_text.splitlines(),
@@ -317,9 +325,21 @@ class ImageProcessor:
             ))
             diff_text = "\n".join(diff_lines)
             if diff_text:
-                self.show_info("OCR文本差异：\n" + diff_text)
+                self.show_info("OCR文本纯文本差异：\n" + diff_text)
             else:
-                self.show_info("OCR文本无差异")
+                self.show_info("OCR文本无纯文本差异")
+
+            # 可选做法2：使用 HtmlDiff 生成HTML格式的差异报告，更直观
+            html_diff = difflib.HtmlDiff().make_file(
+                base_text.splitlines(),
+                compare_text.splitlines(),
+                fromdesc='Base OCR Text',
+                todesc='Compare OCR Text'
+            )
+            with open('ocr_diff.html', 'w', encoding='utf-8') as f:
+                f.write(html_diff)
+            self.show_info("OCR文本差异HTML文件已生成：ocr_diff.html")
+            webbrowser.open('ocr_diff.html')  # 新增：自动打开生成的HTML报告文件
             # ----------------- OCR文本比较功能结束 -----------------
 
             # 获取对齐后的图像用于显示结果
