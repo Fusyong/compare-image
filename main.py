@@ -5,6 +5,8 @@ from PIL import Image, ImageTk
 import cv2
 import numpy as np
 from image_processor import ImageProcessor
+import os
+import glob
 
 class ImageComparisonApp:
     def __init__(self, root):
@@ -27,6 +29,11 @@ class ImageComparisonApp:
         self.right_markers = [(5, 5), (95, 95)]  # R1, R2 (R2在右下角-5的位置)
         self.active_marker = None
 
+        # 图片组数据
+        self.left_images = []
+        self.right_images = []
+        self.current_index = 0
+
         # 放大镜参数
         self.magnifier_size = 100  # 放大区域的大小
         self.magnifier_scale = 4   # 放大倍数
@@ -40,7 +47,12 @@ class ImageComparisonApp:
         self.left_result = None
         self.right_result = None
 
+        # 比较结果缓存
+        self.comparison_cache = []  # 存储最近3个比较结果
+        self.cache_index = -1  # 当前查看的缓存索引，-1表示不查看缓存
+
         self.setup_ui()
+        self.bind_shortcuts()    # 绑定快捷键
 
     def setup_ui(self):
         # 主框架
@@ -61,8 +73,16 @@ class ImageComparisonApp:
         # 创建一个Frame来容纳两个按钮
         buttons_frame = ttk.Frame(toolbar)
         buttons_frame.pack(fill=tk.X, padx=5, pady=2)
-        ttk.Button(buttons_frame, text="加载左图", command=lambda: self.load_image("left")).pack(side=tk.LEFT, expand=True, padx=(0,2))
-        ttk.Button(buttons_frame, text="加载右图", command=lambda: self.load_image("right")).pack(side=tk.LEFT, expand=True, padx=(2,0))
+
+        # 添加加载图片组按钮
+        ttk.Button(buttons_frame, text="加载左图组", command=lambda: self.load_image_group("left")).pack(side=tk.LEFT, expand=True, padx=(0,2))
+        ttk.Button(buttons_frame, text="加载右图组", command=lambda: self.load_image_group("right")).pack(side=tk.LEFT, expand=True, padx=(2,0))
+
+        # 添加图片导航信息
+        nav_frame = ttk.Frame(toolbar)
+        nav_frame.pack(fill=tk.X, padx=5, pady=2)
+        self.nav_label = ttk.Label(nav_frame, text="")
+        self.nav_label.pack()
 
         # 坐标输入区域 - 移动到这里，放在按钮下方
         coords_frame = ttk.LabelFrame(toolbar, text="校准点坐标")
@@ -126,7 +146,7 @@ class ImageComparisonApp:
         self.alpha_scale.set(50)  # 默认透明度0.5
         self.alpha_scale.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        self.compare_button = ttk.Button(toolbar, text="开始比较", command=self.toggle_compare)
+        self.compare_button = ttk.Button(toolbar, text="比较/原图", command=self.toggle_compare)
         self.compare_button.pack(fill=tk.X, padx=5, pady=2)
 
         # 添加提示信息区域到工具栏
@@ -159,6 +179,44 @@ class ImageComparisonApp:
         self.info_label.config(text=message)
         self.root.update()
 
+    def check_and_use_cache(self):
+        """检查是否有可用的缓存，如果有则使用"""
+        if self.left_image is None or self.right_image is None:
+            return False
+
+        # 检查是否有当前图片对的缓存
+        current_cache = None
+        for cache in self.comparison_cache:
+            # 检查图片路径是否匹配
+            if (cache.get("left_path") == self.left_images[self.current_index] and
+                cache.get("right_path") == self.right_images[self.current_index] and
+                cache.get("mode") == self.mode_var.get()):
+                current_cache = cache
+                break
+
+        if current_cache is not None:
+            # 检查图片是否被修改
+            if (np.array_equal(self.left_image, current_cache.get("original_left")) and
+                np.array_equal(self.right_image, current_cache.get("original_right"))):
+                # 使用缓存的比较结果
+                if current_cache["left"] is not None:
+                    self.display_image(self.left_canvas, current_cache["left"], self.left_markers)
+                if current_cache["right"] is not None:
+                    self.display_image(self.right_canvas, current_cache["right"], self.right_markers)
+                self.show_info("使用缓存的比较结果")
+                print("使用缓存")  # 添加日志
+                return True
+            else:
+                # 图片已修改，清除当前缓存
+                self.comparison_cache = [cache for cache in self.comparison_cache if not (
+                    cache.get("left_path") == self.left_images[self.current_index] and
+                    cache.get("right_path") == self.right_images[self.current_index]
+                )]
+                print("清除缓存")  # 添加日志
+
+        print("未找到缓存")  # 添加日志
+        return False
+
     def toggle_compare(self):
         """切换比较状态"""
         if self.left_image is None or self.right_image is None:
@@ -167,21 +225,29 @@ class ImageComparisonApp:
 
         if not self.is_comparing:
             self.is_comparing = True
-            self.compare_button.configure(text="停止比较")
+            self.compare_button.configure(text="原图")
 
-            # 显示OCR进行中的提示
-            self.show_info("正在OCR识别...")
-
-            # 开始比较
-            self.start_comparison()
+            # 检查是否有可用的缓存
+            if not self.check_and_use_cache():
+                # 显示OCR进行中的提示
+                self.show_info("正在OCR识别...")
+                # 开始比较
+                self.start_comparison()
         else:
             self.is_comparing = False
-            self.compare_button.configure(text="开始比较")
+            self.compare_button.configure(text="比较")
             self.show_info("")  # 清空提示信息
+
+            # 显示原图
+            if self.left_image is not None:
+                self.display_image(self.left_canvas, self.left_image, self.left_markers)
+            if self.right_image is not None:
+                self.display_image(self.right_canvas, self.right_image, self.right_markers)
 
     def start_comparison(self):
         """开始图像比较"""
         try:
+            print("开始新的比较")  # 添加日志
             mode = self.mode_var.get()
             if mode == "compare":
                 self.left_result = self.processor.compare_images(
@@ -218,6 +284,33 @@ class ImageComparisonApp:
                     "right"
                 )
 
+            # 缓存比较结果
+            if self.left_result is not None or self.right_result is not None:
+                # 添加新的当前缓存
+                cache_item = {
+                    "left": self.left_result.copy() if self.left_result is not None else None,
+                    "right": self.right_result.copy() if self.right_result is not None else None,
+                    "mode": mode,
+                    "left_path": self.left_images[self.current_index],  # 保存图片路径
+                    "right_path": self.right_images[self.current_index],
+                    "original_left": self.left_image.copy(),  # 保存原始图片用于比较
+                    "original_right": self.right_image.copy()
+                }
+                self.comparison_cache.append(cache_item)
+
+                # 限制历史缓存数量
+                while len(self.comparison_cache) > 3:
+                    # 删除最旧的非当前缓存
+                    for i, cache in enumerate(self.comparison_cache):
+                        if not (
+                            cache.get("left_path") == self.left_images[self.current_index] and
+                            cache.get("right_path") == self.right_images[self.current_index]
+                        ):
+                            self.comparison_cache.pop(i)
+                            break
+
+                self.cache_index = -1  # 重置缓存索引
+
             # 显示结果
             if self.left_result is not None:
                 self.display_image(self.left_canvas, self.left_result, self.left_markers)
@@ -227,53 +320,96 @@ class ImageComparisonApp:
             # 根据比较结果更新提示信息
             if self.left_result is None:
                 self.show_info("OCR识别失败")
-                print("OCR识别失败")
             else:
                 # 检查是否有差异（通过检查图像是否被修改）
-                if np.array_equal(self.left_result, self.left_image if mode == "left" else self.right_image):  # type: ignore
+                if np.array_equal(self.left_result, self.left_image if mode == "left" else self.right_image):
                     self.show_info("OCR结果相同")
-                    print("OCR结果相同")
                 else:
                     self.show_info("已标记出差异区域并生成HTML报告")
 
         except Exception as e:
-            print(e)
             self.show_info(f"比较出错: {str(e)}")
-            print(e)
             self.is_comparing = False
-            self.compare_button.config(text="开始比较")
+            self.compare_button.config(text="比较")
 
-    def load_image(self, side):
-        file_path = filedialog.askopenfilename(
-            filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp *.gif")]
-        )
-        if not file_path:
+    def load_image_group(self, side):
+        """加载图片组"""
+        dir_path = filedialog.askdirectory(title=f"选择{side}图组目录")
+        if not dir_path:
             return
 
-        image = cv2.imread(file_path)  # pylint: disable=no-member
-        if image is None:
-            self.show_info(f"无法加载图片: {file_path}")
+        # 获取目录下的所有图片文件
+        image_files = sorted(glob.glob(os.path.join(dir_path, "*.png")))
+        if not image_files:
+            self.show_info(f"在{dir_path}中未找到PNG图片")
             return
 
         if side == "left":
-            self.left_image = image
-            self.left_result = None  # 清除之前的比较结果
-            self.show_info("已加载左图")
+            self.left_images = image_files
         else:
-            self.right_image = image
-            self.right_result = None  # 清除之前的比较结果
-            self.show_info("已加载右图")
+            self.right_images = image_files
 
-        # 如果正在比较状态，切换回原图状态
-        if self.is_comparing:
-            self.is_comparing = False
-            self.compare_button.configure(text="开始比较")
+        # 如果两边都有图片，加载第一对
+        if self.left_images and self.right_images:
+            self.current_index = 0
+            self.load_current_images()
 
-        # 显示图像
-        if side == "left":
-            self.display_image(self.left_canvas, self.left_image, self.left_markers)
-        else:
-            self.display_image(self.right_canvas, self.right_image, self.right_markers)
+    def load_current_images(self):
+        """加载当前索引位置的图片"""
+        if 0 <= self.current_index < len(self.left_images):
+            self.load_image("left", self.left_images[self.current_index])
+        if 0 <= self.current_index < len(self.right_images):
+            self.load_image("right", self.right_images[self.current_index])
+
+        # 更新导航信息
+        if self.left_images and self.right_images:
+            self.nav_label.config(text=f"当前图片: {self.current_index + 1}/{min(len(self.left_images), len(self.right_images))}")
+
+    def bind_shortcuts(self):
+        """绑定快捷键"""
+        self.root.bind("<Prior>", lambda e: self.navigate_images(-1))  # PgUp
+        self.root.bind("<Next>", lambda e: self.navigate_images(1))    # PgDn
+        self.root.bind("<Control-p>", lambda e: self.toggle_compare())  # Ctrl+P
+        self.root.bind("<Control-Left>", lambda e: self.view_cache(-1))  # Ctrl+Left
+        self.root.bind("<Control-Right>", lambda e: self.view_cache(1))  # Ctrl+Right
+
+    def navigate_images(self, direction):
+        """导航到上一张或下一张图片"""
+        if not self.left_images or not self.right_images:
+            return
+
+        new_index = self.current_index + direction
+        if 0 <= new_index < min(len(self.left_images), len(self.right_images)):
+            # 更新索引
+            self.current_index = new_index
+
+            # 加载新图片
+            self.load_current_images()
+
+            # 如果当前处于比较状态，开始比较
+            if self.is_comparing:
+                # 先检查是否有可用的缓存
+                if not self.check_and_use_cache():
+                    self.start_comparison()
+
+    def load_image(self, side, file_path):
+        """加载图片"""
+        try:
+            image = cv2.imread(file_path)
+            if image is None:
+                raise ValueError("无法加载图片")
+
+            if side == "left":
+                self.left_image = image
+                self.display_image(self.left_canvas, self.left_image, self.left_markers)
+            else:
+                self.right_image = image
+                self.display_image(self.right_canvas, self.right_image, self.right_markers)
+
+            self.update_coordinate_entries()
+            self.show_info(f"已加载{side}图: {os.path.basename(file_path)}")
+        except Exception as e:
+            self.show_info(f"加载图片失败: {str(e)}")
 
     def display_image(self, canvas, image, markers):
         # 调整图像大小以适应画布
@@ -436,6 +572,36 @@ class ImageComparisonApp:
         magnifier_image = ImageTk.PhotoImage(image=Image.fromarray(roi))
         self.magnifier_canvas.create_image(0, 0, anchor=tk.NW, image=magnifier_image)
         self.magnifier_canvas.image = magnifier_image  # type: ignore
+
+    def view_cache(self, direction):
+        """查看缓存的比较结果"""
+        if not self.comparison_cache:
+            return
+
+        # 计算新的缓存索引
+        new_index = self.cache_index + direction
+        if new_index < -1:  # -1表示不查看缓存
+            new_index = -1
+        elif new_index >= len(self.comparison_cache):
+            new_index = len(self.comparison_cache) - 1
+
+        self.cache_index = new_index
+
+        if self.cache_index == -1:
+            # 显示当前图片
+            if self.left_image is not None:
+                self.display_image(self.left_canvas, self.left_image, self.left_markers)
+            if self.right_image is not None:
+                self.display_image(self.right_canvas, self.right_image, self.right_markers)
+            self.show_info("显示当前图片")
+        else:
+            # 显示缓存的比较结果
+            cache_item = self.comparison_cache[self.cache_index]
+            if cache_item["left"] is not None:
+                self.display_image(self.left_canvas, cache_item["left"], self.left_markers)
+            if cache_item["right"] is not None:
+                self.display_image(self.right_canvas, cache_item["right"], self.right_markers)
+            self.show_info(f"查看缓存结果 {self.cache_index + 1}/{len(self.comparison_cache)}")
 
 if __name__ == "__main__":
     root = tk.Tk()
