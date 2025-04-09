@@ -1,42 +1,99 @@
-"""多个比较模式
-1. 像素比较
-2. 叠置比较
-3. OCR文字比较
+"""图像处理器模块
+
+提供多种图像比较模式：
+1. 像素比较：直接比较两张图片的像素差异
+2. 叠置比较：将两张图片叠加显示
+3. OCR文字比较：识别并比较图片中的文字内容
+
+Classes:
+    ImageProcessor: 图像处理器主类，提供各种图像处理和比较功能
 """
+
 import json
+from typing import List, Tuple, Optional, Callable, Dict, Any, Union, cast, Sequence, TypeVar
 import cv2  # type: ignore
 import webbrowser  # 新增：用于自动打开HTML报告文件
 import numpy as np
+from numpy.typing import NDArray
 import difflib  # 新增：引入 difflib 模块，用于文本比较
 from rapidocr_onnxruntime import RapidOCR
 from PIL import Image, ImageDraw, ImageFont
 
-class ImageProcessor:
-    def __init__(self):
-        self.info_callback = None  # 用于显示信息的回调函数
-        # 添加缓存相关的属性
-        self.left_image_hash = None  # 左图像的哈希值
-        self.right_image_hash = None  # 右图像的哈希值
-        self.cached_left_result = None  # 缓存的左图OCR结果
-        self.cached_right_result = None  # 缓存的右图OCR结果
+# 类型别名定义
+ImageArray = NDArray[np.uint8]  # OpenCV图像类型
+Point = Tuple[float, float]  # 点坐标类型 (x, y)
+Box = List[Point]  # 文本框坐标点列表
+OCRResult = List[Tuple[Box, str]]  # OCR结果类型 [(box, text), ...]
+InfoCallback = Callable[[str], None]  # 信息回调函数类型
 
-    def set_info_callback(self, callback):
-        """设置信息显示回调函数"""
+class ImageProcessor:
+    """图像处理器类
+
+    提供图像预处理、比较和OCR功能。支持图像的缩放、对齐、叠加和文字识别。
+
+    Attributes:
+        info_callback (Optional[InfoCallback]): 信息显示回调函数
+        left_image_hash (Optional[int]): 左图像的哈希值，用于缓存判断
+        right_image_hash (Optional[int]): 右图像的哈希值，用于缓存判断
+        cached_left_result (Optional[OCRResult]): 缓存的左图OCR结果
+        cached_right_result (Optional[OCRResult]): 缓存的右图OCR结果
+    """
+
+    def __init__(self) -> None:
+        """初始化图像处理器"""
+        self.info_callback: Optional[InfoCallback] = None
+        self.left_image_hash: Optional[int] = None
+        self.right_image_hash: Optional[int] = None
+        self.cached_left_result: Optional[OCRResult] = None
+        self.cached_right_result: Optional[OCRResult] = None
+
+    def set_info_callback(self, callback: InfoCallback) -> None:
+        """设置信息显示回调函数
+
+        Args:
+            callback: 接收字符串消息的回调函数
+        """
         self.info_callback = callback
 
-    def show_info(self, message):
-        """显示信息"""
+    def show_info(self, message: str) -> None:
+        """显示信息
+
+        Args:
+            message: 要显示的信息
+        """
         if self.info_callback:
             self.info_callback(message)
         else:
-            print(message)  # 如果没有设置回调函数，则使用print作为后备方案
+            print(message)
 
-    def get_distance(self, p1, p2):
-        """计算两点之间的距离"""
+    def get_distance(self, p1: Point, p2: Point) -> float:
+        """计算两点之间的欧氏距离
+
+        Args:
+            p1: 第一个点的坐标 (x, y)
+            p2: 第二个点的坐标 (x, y)
+
+        Returns:
+            两点间的距离
+        """
         return np.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
 
-    def normalize_scale(self, image, src_points, dst_points):
-        """根据两对点的距离调整图像比例"""
+    def normalize_scale(self, image: NDArray[np.uint8], src_points: Sequence[Point], dst_points: Sequence[Point]) -> Tuple[NDArray[np.uint8], List[Point]]:
+        """根据两对点的距离调整图像比例
+
+        计算源图和目标图中两点的距离比例，并按此比例缩放图像。
+
+        Args:
+            image: 要缩放的源图像
+            src_points: 源图像上的两个参考点 [(x1, y1), (x2, y2)]
+            dst_points: 目标图像上的两个参考点 [(x1, y1), (x2, y2)]
+
+        Returns:
+            Tuple[NDArray[np.uint8], List[Point]]: 缩放后的图像和调整后的点坐标
+
+        Raises:
+            ValueError: 如果输入点坐标无效或图像处理失败
+        """
         # 计算源图和目标图中两点的距离
         src_dist = self.get_distance(src_points[0], src_points[1])
         dst_dist = self.get_distance(dst_points[0], dst_points[1])
@@ -59,9 +116,20 @@ class ImageProcessor:
 
         return scaled_image, scaled_points
 
-    def get_transform_matrix(self, src_point, dst_point, angle=0):
-        """计算平移变换矩阵"""
-        # 创建平移矩阵
+    def get_transform_matrix(self, src_point: Point, dst_point: Point, angle: float = 0) -> NDArray[np.float32]:
+        """计算平移变换矩阵
+
+        根据源点和目标点计算平移变换矩阵。
+
+        Args:
+            src_point: 源图像上的参考点 (x, y)
+            dst_point: 目标图像上的参考点 (x, y)
+            angle: 旋转角度（暂未使用）
+
+        Returns:
+            2x3的平移变换矩阵
+        """
+        # 计算平移量
         dx = dst_point[0] - src_point[0]
         dy = dst_point[1] - src_point[1]
 
