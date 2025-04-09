@@ -1,14 +1,18 @@
-import difflib
+"""
+图像比对工具
+"""
+import os
+import glob
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog
+from typing import List, Tuple, Optional, Dict, Any, cast, TYPE_CHECKING
+
 from PIL import Image, ImageTk
 import cv2  # type: ignore
 import numpy as np
-from image_processor import ImageProcessor
-import os
-import glob
-from typing import List, Tuple, Optional, Dict, Any, Union, cast, TYPE_CHECKING
 from numpy.typing import NDArray
+
+from image_processor import ImageProcessor
 
 # 类型别名定义
 Coordinates = Tuple[float, float]  # 坐标点 (x, y)
@@ -192,9 +196,11 @@ class ImageComparisonApp:
         right_dir = "img/R"
 
         if os.path.exists(left_dir) and os.path.exists(right_dir):
-            # 获取目录下的所有图片文件
+            # 获取目录下的所有图片文件，支持png和jpg两种格式
             left_images = sorted(glob.glob(os.path.join(left_dir, "*.png")))
             right_images = sorted(glob.glob(os.path.join(right_dir, "*.png")))
+            left_images.extend(sorted(glob.glob(os.path.join(left_dir, "*.jpg"))))
+            right_images.extend(sorted(glob.glob(os.path.join(right_dir, "*.jpg"))))
 
             if left_images and right_images:
                 self.left_images = left_images
@@ -891,7 +897,7 @@ class ImageComparisonApp:
             return
 
         canvas = self.left_canvas if side == "left" else self.right_canvas
-        markers = self.left_markers if side == "right" else self.right_markers
+        markers = self.left_markers if side == "left" else self.right_markers
 
         # 根据比较状态选择正确的图像
         if self.is_comparing:
