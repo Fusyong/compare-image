@@ -131,23 +131,37 @@ class ImageComparisonApp:
         self.r2_y.pack(side=tk.LEFT)
 
         # 添加模式选择 - 移到坐标输入区域后面
-        mode_frame = ttk.Frame(toolbar)
+        mode_frame = ttk.LabelFrame(toolbar, text="比较模式")
         mode_frame.pack(fill=tk.X, padx=5, pady=2)
-        self.mode_var = tk.StringVar(value="compare")
-        ttk.Radiobutton(mode_frame, text="像素比较", variable=self.mode_var, value="compare").pack(side=tk.LEFT)
-        ttk.Radiobutton(mode_frame, text="叠加模式", variable=self.mode_var, value="overlay").pack(side=tk.LEFT)
-        ttk.Radiobutton(mode_frame, text="OCR比较", variable=self.mode_var, value="ocr").pack(side=tk.LEFT)
 
-        # 叠加模式的透明度控制
-        alpha_frame = ttk.Frame(toolbar)
+        # 模式选择 - 第一行
+        mode_select_frame = ttk.Frame(mode_frame)
+        mode_select_frame.pack(fill=tk.X, padx=5, pady=2)
+        self.mode_var = tk.StringVar(value="compare")
+        ttk.Radiobutton(mode_select_frame, text="像素", variable=self.mode_var, value="compare").pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(mode_select_frame, text="叠加", variable=self.mode_var, value="overlay").pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(mode_select_frame, text="OCR", variable=self.mode_var, value="ocr").pack(side=tk.LEFT, padx=5)
+
+        # 叠加模式的透明度控制 - 第二行
+        alpha_frame = ttk.Frame(mode_frame)
         alpha_frame.pack(fill=tk.X, padx=5, pady=2)
         ttk.Label(alpha_frame, text="叠加透明度:").pack(side=tk.LEFT)
-        self.alpha_scale = ttk.Scale(alpha_frame, from_=0, to=100, orient=tk.HORIZONTAL)
-        self.alpha_scale.set(50)  # 默认透明度0.5
-        self.alpha_scale.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.alpha_entry = ttk.Entry(alpha_frame, width=5)
+        self.alpha_entry.insert(0, "50")  # 默认透明度50%
+        self.alpha_entry.pack(side=tk.LEFT, padx=5)
+        ttk.Label(alpha_frame, text="%").pack(side=tk.LEFT)
+        # 绑定回车键事件
+        self.alpha_entry.bind("<Return>", self.on_alpha_change)
 
-        self.compare_button = ttk.Button(toolbar, text="比较/原图", command=self.toggle_compare)
+        # 比较按钮
+        self.compare_button = ttk.Button(toolbar, text="比较/原图 Ctrl+P", command=self.toggle_compare)
         self.compare_button.pack(fill=tk.X, padx=5, pady=2)
+
+        # 添加翻页按钮
+        page_frame = ttk.Frame(toolbar)
+        page_frame.pack(fill=tk.X, padx=5, pady=2)
+        ttk.Button(page_frame, text="上页 PgUp", command=lambda: self.navigate_images(-1)).pack(side=tk.LEFT, expand=True, padx=(0,2))
+        ttk.Button(page_frame, text="下页 PgDn", command=lambda: self.navigate_images(1)).pack(side=tk.LEFT, expand=True, padx=(2,0))
 
         # 添加提示信息区域到工具栏
         info_frame = ttk.LabelFrame(toolbar, text="提示信息")
@@ -225,7 +239,7 @@ class ImageComparisonApp:
 
         if not self.is_comparing:
             self.is_comparing = True
-            self.compare_button.configure(text="原图")
+            self.compare_button.configure(text="原图 Ctrl+P")
 
             # 检查是否有可用的缓存
             if not self.check_and_use_cache():
@@ -235,7 +249,7 @@ class ImageComparisonApp:
                 self.start_comparison()
         else:
             self.is_comparing = False
-            self.compare_button.configure(text="比较")
+            self.compare_button.configure(text="比较 Ctrl+P")
             self.show_info("")  # 清空提示信息
 
             # 显示原图
@@ -243,6 +257,24 @@ class ImageComparisonApp:
                 self.display_image(self.left_canvas, self.left_image, self.left_markers)
             if self.right_image is not None:
                 self.display_image(self.right_canvas, self.right_image, self.right_markers)
+
+    def on_alpha_change(self, event):
+        """透明度变化时的回调函数"""
+        try:
+            alpha = int(self.alpha_entry.get())
+            if 0 <= alpha <= 100:
+                if self.mode_var.get() == "overlay" and self.is_comparing:
+                    # 如果当前是叠加模式且正在比较，重新开始比较
+                    self.start_comparison()
+                    self.show_info(f"叠加透明度已调整为: {alpha}%")
+            else:
+                self.show_info("透明度必须在0-100之间")
+                self.alpha_entry.delete(0, tk.END)
+                self.alpha_entry.insert(0, "50")
+        except ValueError:
+            self.show_info("请输入有效的数字")
+            self.alpha_entry.delete(0, tk.END)
+            self.alpha_entry.insert(0, "50")
 
     def start_comparison(self):
         """开始图像比较"""
@@ -261,7 +293,10 @@ class ImageComparisonApp:
                     "right"
                 )
             elif mode == "overlay":
-                alpha = self.alpha_scale.get() / 100.0
+                try:
+                    alpha = int(self.alpha_entry.get()) / 100.0
+                except ValueError:
+                    alpha = 0.5  # 默认值
                 self.left_result = self.processor.overlay_images(
                     self.left_image, self.right_image,
                     self.left_markers, self.right_markers,
@@ -330,7 +365,7 @@ class ImageComparisonApp:
         except Exception as e:
             self.show_info(f"比较出错: {str(e)}")
             self.is_comparing = False
-            self.compare_button.config(text="比较")
+            self.compare_button.config(text="比较 Ctrl+P")
 
     def load_image_group(self, side):
         """加载图片组"""
@@ -346,13 +381,16 @@ class ImageComparisonApp:
 
         if side == "left":
             self.left_images = image_files
+            self.show_info(f"已加载左图组，共{len(image_files)}张图片")
         else:
             self.right_images = image_files
+            self.show_info(f"已加载右图组，共{len(image_files)}张图片")
 
         # 如果两边都有图片，加载第一对
         if self.left_images and self.right_images:
             self.current_index = 0
             self.load_current_images()
+            self.show_info(f"已加载第{self.current_index + 1}对图片")
 
     def load_current_images(self):
         """加载当前索引位置的图片"""
