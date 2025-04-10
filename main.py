@@ -5,112 +5,21 @@ import os
 import glob
 import tkinter as tk
 from tkinter import ttk, filedialog
-from typing import List, Tuple, Optional, Dict, Any, cast, TYPE_CHECKING
+from typing import List, Tuple, Optional, Dict, Any
 
 from PIL import Image, ImageTk
-import cv2  # type: ignore
 import numpy as np
-from numpy.typing import NDArray
 
 from image_processor import ImageProcessor
+from cv_utils import (
+    ImageArray, COLOR_BGR2RGB, MARKER_CROSS, FONT_HERSHEY_SIMPLEX,
+    cv_imread, cv_resize, cv_cvtColor, cv_drawMarker, cv_putText
+)
 
 # 类型别名定义
 Coordinates = Tuple[float, float]  # 坐标点 (x, y)
-ImageArray = NDArray[np.uint8]  # OpenCV图像类型
 MarkerList = List[Coordinates]  # 标记点列表
 CacheItem = Dict[str, Any]  # 缓存项类型
-
-# OpenCV常量
-if TYPE_CHECKING:
-    IMREAD_COLOR: int
-    COLOR_BGR2RGB: int
-    MARKER_CROSS: int
-    FONT_HERSHEY_SIMPLEX: int
-else:
-    IMREAD_COLOR = cv2.IMREAD_COLOR
-    COLOR_BGR2RGB = cv2.COLOR_BGR2RGB
-    MARKER_CROSS = cv2.MARKER_CROSS
-    FONT_HERSHEY_SIMPLEX = cv2.FONT_HERSHEY_SIMPLEX
-
-def cv_imread(filename: str) -> Optional[ImageArray]:
-    """安全的图像读取函数
-
-    Args:
-        filename: 图像文件路径
-
-    Returns:
-        读取的图像数据，如果读取失败则返回None
-    """
-    img = cv2.imread(filename)  # type: ignore
-    if img is None:
-        return None
-    return cast(ImageArray, img)
-
-def cv_resize(image: ImageArray, size: Tuple[int, int]) -> ImageArray:
-    """安全的图像缩放函数
-
-    Args:
-        image: 输入图像
-        size: 目标尺寸 (width, height)
-
-    Returns:
-        缩放后的图像
-    """
-    return cast(ImageArray, cv2.resize(image, size))  # type: ignore
-
-def cv_cvtColor(image: ImageArray, code: int) -> ImageArray:
-    """安全的颜色空间转换函数
-
-    Args:
-        image: 输入图像
-        code: 转换代码
-
-    Returns:
-        转换后的图像
-    """
-    return cast(ImageArray, cv2.cvtColor(image, code))  # type: ignore
-
-def cv_drawMarker(
-    image: ImageArray,
-    position: Tuple[int, int],
-    color: Tuple[int, int, int],
-    markerType: int,
-    markerSize: int,
-    thickness: int
-) -> None:
-    """安全的标记点绘制函数
-
-    Args:
-        image: 输入图像
-        position: 标记点位置 (x, y)
-        color: 颜色 (B,G,R)
-        markerType: 标记类型
-        markerSize: 标记大小
-        thickness: 线条粗细
-    """
-    cv2.drawMarker(image, position, color, markerType, markerSize, thickness)  # type: ignore
-
-def cv_putText(
-    image: ImageArray,
-    text: str,
-    org: Tuple[int, int],
-    fontFace: int,
-    fontScale: float,
-    color: Tuple[int, int, int],
-    thickness: int
-) -> None:
-    """安全的文本绘制函数
-
-    Args:
-        image: 输入图像
-        text: 要绘制的文本
-        org: 文本位置 (x, y)
-        fontFace: 字体
-        fontScale: 字体大小
-        color: 颜色 (B,G,R)
-        thickness: 线条粗细
-    """
-    cv2.putText(image, text, org, fontFace, fontScale, color, thickness)  # type: ignore
 
 class ImageComparisonApp:
     """图像比较应用主类
