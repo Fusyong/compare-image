@@ -325,7 +325,7 @@ class ImageComparisonApp:
         self.alpha_entry.bind("<Return>", self.on_alpha_change)
 
         # 比较按钮
-        self.compare_button = ttk.Button(toolbar, text="比较/原图 Ctrl+P", command=self.toggle_compare)
+        self.compare_button = ttk.Button(toolbar, text="比较/原图 Alt+Q", command=self.toggle_compare)
         self.compare_button.pack(fill=tk.X, padx=5, pady=2)
 
         # 添加翻页按钮
@@ -445,7 +445,7 @@ class ImageComparisonApp:
 
         if not self.is_comparing:
             self.is_comparing = True
-            self.compare_button.configure(text="原图 Ctrl+P")
+            self.compare_button.configure(text="原图 Alt+Q")
 
             # 检查是否有可用的缓存
             if not self.check_and_use_cache():
@@ -459,7 +459,7 @@ class ImageComparisonApp:
         else:
             # 切换回原图模式
             self.is_comparing = False
-            self.compare_button.configure(text="比较 Ctrl+P")
+            self.compare_button.configure(text="比较 Alt+Q")
             self.show_info("")  # 清空提示信息
 
             # 显示原图
@@ -627,7 +627,7 @@ class ImageComparisonApp:
             self.show_info(f"比较出错: {type(e).__name__} - {str(e)}")
             self.is_comparing = False
             if self.compare_button:
-                self.compare_button.config(text="比较 Ctrl+P")
+                self.compare_button.config(text="比较 Alt+Q")
 
     def load_image_group(self, side):
         """加载图片组"""
@@ -717,7 +717,7 @@ class ImageComparisonApp:
         """绑定快捷键"""
         self.root.bind("<Prior>", lambda e: self.navigate_images(-1))  # PgUp
         self.root.bind("<Next>", lambda e: self.navigate_images(1))    # PgDn
-        self.root.bind("<Control-p>", lambda e: self.toggle_compare())  # Ctrl+P
+        self.root.bind("<Alt-q>", lambda e: self.toggle_compare())  # Alt+Q
         self.root.bind("<Control-Left>", lambda e: self.view_cache(-1))  # Ctrl+Left
         self.root.bind("<Control-Right>", lambda e: self.view_cache(1))  # Ctrl+Right
 
