@@ -254,7 +254,7 @@ class ImageComparisonApp:
 
         # 添加放大器按钮
         self.zoom_mode = False
-        self.zoom_button = ttk.Button(toolbar, text="放大器 Ctrl+Mouse", command=self.toggle_zoom_mode)
+        self.zoom_button = ttk.Button(toolbar, text="放大器 Alt+Z", command=self.toggle_zoom_mode)
         self.zoom_button.pack(fill=tk.X, padx=5, pady=2)
 
         # 图像显示区域（在右侧面板）
@@ -1049,10 +1049,10 @@ class ImageComparisonApp:
         """切换放大器模式"""
         self.zoom_mode = not self.zoom_mode
         if self.zoom_mode:
-            self.zoom_button.configure(text="放大器 Ctrl+Mouse (已激活)")
+            self.zoom_button.configure(text="放大器 Alt+Z (已激活)")
             self.show_info("放大器已激活，请在图像上拖动选择区域")
         else:
-            self.zoom_button.configure(text="放大器 Ctrl+Mouse")
+            self.zoom_button.configure(text="放大器 Alt+Z")
             self.show_info("放大器已关闭")
 
     def start_selection(self, event, side):
@@ -1305,6 +1305,7 @@ class ImageComparisonApp:
         self.root.bind("<Prior>", lambda e: self.navigate_images(-1))  # PgUp
         self.root.bind("<Next>", lambda e: self.navigate_images(1))    # PgDn
         self.root.bind("<Alt-q>", lambda e: self.toggle_compare())  # Alt+Q
+        self.root.bind("<Alt-z>", lambda e: self.toggle_zoom_mode())  # Alt+Z
 
 if __name__ == "__main__":
     root = tk.Tk()
