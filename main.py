@@ -254,7 +254,7 @@ class ImageComparisonApp:
 
         # 添加放大器按钮
         self.zoom_mode = False
-        self.zoom_button = ttk.Button(toolbar, text="放大器", command=self.toggle_zoom_mode)
+        self.zoom_button = ttk.Button(toolbar, text="放大器 Ctrl+Mouse", command=self.toggle_zoom_mode)
         self.zoom_button.pack(fill=tk.X, padx=5, pady=2)
 
         # 图像显示区域（在右侧面板）
@@ -883,12 +883,14 @@ class ImageComparisonApp:
         self.update_coordinate_entries()
 
     def end_drag(self, event):
+        """结束拖动标记点"""
         self.active_marker = None
         self.marker_magnifier_visible = False
-        # 清除放大镜
-        if hasattr(self, 'marker_magnifier_window'):
+        # 清除标记点放大器
+        if hasattr(self, 'marker_magnifier_window') and self.marker_magnifier_window is not None:
             self.marker_magnifier_window.destroy()
-            delattr(self, 'marker_magnifier_window')
+            self.marker_magnifier_window = None
+            self.marker_magnifier_canvas = None
 
     def update_coordinate_entries(self) -> None:
         """更新坐标输入框的值（像素值）"""
@@ -1047,10 +1049,10 @@ class ImageComparisonApp:
         """切换放大器模式"""
         self.zoom_mode = not self.zoom_mode
         if self.zoom_mode:
-            self.zoom_button.configure(text="放大器 (已激活)")
+            self.zoom_button.configure(text="放大器 Ctrl+Mouse (已激活)")
             self.show_info("放大器已激活，请在图像上拖动选择区域")
         else:
-            self.zoom_button.configure(text="放大器")
+            self.zoom_button.configure(text="放大器 Ctrl+Mouse")
             self.show_info("放大器已关闭")
 
     def start_selection(self, event, side):
@@ -1103,7 +1105,18 @@ class ImageComparisonApp:
 
         # 获取正确的canvas对象和图像
         canvas = self.left_canvas if side == "left" else self.right_canvas
-        image = self.left_image if side == "left" else self.right_image
+
+        # 根据当前状态选择正确的图像
+        if self.is_comparing:
+            if self.mode_var.get() == "ocr":
+                # OCR模式下显示原图
+                image = self.left_image if side == "left" else self.right_image
+            else:
+                # 其他比较模式下显示比较结果
+                image = self.left_result if side == "left" else self.right_result
+        else:
+            # 非比较状态下显示原图
+            image = self.left_image if side == "left" else self.right_image
 
         if not isinstance(canvas, tk.Canvas) or image is None:
             return
@@ -1292,8 +1305,6 @@ class ImageComparisonApp:
         self.root.bind("<Prior>", lambda e: self.navigate_images(-1))  # PgUp
         self.root.bind("<Next>", lambda e: self.navigate_images(1))    # PgDn
         self.root.bind("<Alt-q>", lambda e: self.toggle_compare())  # Alt+Q
-        self.root.bind("<Control-Left>", lambda e: self.view_cache(-1))  # Ctrl+Left
-        self.root.bind("<Control-Right>", lambda e: self.view_cache(1))  # Ctrl+Right
 
 if __name__ == "__main__":
     root = tk.Tk()
