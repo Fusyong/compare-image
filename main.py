@@ -737,42 +737,54 @@ class ImageComparisonApp:
 
     def on_left_click(self, event):
         """处理左图点击事件"""
-        if self.zoom_mode:
+        if event.state & 0x4:  # Ctrl键被按下
+            self.start_selection(event, "left")
+        elif self.zoom_mode:
             self.start_selection(event, "left")
         else:
             self.start_drag(event, "left")
 
     def on_left_drag(self, event):
         """处理左图拖动事件"""
-        if self.zoom_mode:
+        if event.state & 0x4:  # Ctrl键被按下
+            self.update_selection(event, "left")
+        elif self.zoom_mode:
             self.update_selection(event, "left")
         else:
             self.drag(event, "left")
 
     def on_left_release(self, event):
         """处理左图释放事件"""
-        if self.zoom_mode:
+        if event.state & 0x4:  # Ctrl键被按下
+            self.end_selection(event, "left")
+        elif self.zoom_mode:
             self.end_selection(event, "left")
         else:
             self.end_drag(event)
 
     def on_right_click(self, event):
         """处理右图点击事件"""
-        if self.zoom_mode:
+        if event.state & 0x4:  # Ctrl键被按下
+            self.start_selection(event, "right")
+        elif self.zoom_mode:
             self.start_selection(event, "right")
         else:
             self.start_drag(event, "right")
 
     def on_right_drag(self, event):
         """处理右图拖动事件"""
-        if self.zoom_mode:
+        if event.state & 0x4:  # Ctrl键被按下
+            self.update_selection(event, "right")
+        elif self.zoom_mode:
             self.update_selection(event, "right")
         else:
             self.drag(event, "right")
 
     def on_right_release(self, event):
         """处理右图释放事件"""
-        if self.zoom_mode:
+        if event.state & 0x4:  # Ctrl键被按下
+            self.end_selection(event, "right")
+        elif self.zoom_mode:
             self.end_selection(event, "right")
         else:
             self.end_drag(event)
@@ -1057,9 +1069,6 @@ class ImageComparisonApp:
 
     def start_selection(self, event, side):
         """开始选择区域"""
-        if not self.zoom_mode:
-            return
-
         # 获取正确的canvas对象
         canvas = self.left_canvas if side == "left" else self.right_canvas
         if not isinstance(canvas, tk.Canvas):
@@ -1071,6 +1080,10 @@ class ImageComparisonApp:
             outline='red', width=2
         )
 
+        # 显示提示信息
+        if event.state & 0x4:  # Ctrl键被按下
+            self.show_info("按住Ctrl键拖动选择区域进行放大")
+
     def update_selection(self, event: tk.Event, side: str) -> None:
         """更新选择区域
 
@@ -1078,12 +1091,9 @@ class ImageComparisonApp:
             event: 鼠标事件
             side: 图像侧（"left" 或 "right"）
         """
-        if not self.zoom_mode or self.selection_rect is None or self.selection_start is None:
-            return
-
         # 获取正确的canvas对象
         canvas = self.left_canvas if side == "left" else self.right_canvas
-        if not isinstance(canvas, tk.Canvas):
+        if not isinstance(canvas, tk.Canvas) or self.selection_rect is None or self.selection_start is None:
             return
 
         x1, y1 = self.selection_start
@@ -1100,9 +1110,6 @@ class ImageComparisonApp:
             event: 鼠标事件
             side: 图像侧（"left" 或 "right"）
         """
-        if not self.zoom_mode or self.selection_rect is None or self.selection_start is None:
-            return
-
         # 获取正确的canvas对象和图像
         canvas = self.left_canvas if side == "left" else self.right_canvas
 
@@ -1118,7 +1125,7 @@ class ImageComparisonApp:
             # 非比较状态下显示原图
             image = self.left_image if side == "left" else self.right_image
 
-        if not isinstance(canvas, tk.Canvas) or image is None:
+        if not isinstance(canvas, tk.Canvas) or image is None or self.selection_rect is None or self.selection_start is None:
             return
 
         # 获取选择区域的坐标
