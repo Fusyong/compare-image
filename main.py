@@ -60,8 +60,8 @@ class ImageComparisonApp:
         # 图像数据
         self.left_image: Optional[ImageArray] = None
         self.right_image: Optional[ImageArray] = None
-        self.left_markers: MarkerList = [(5.0, 5.0), (95.0, 95.0)]  # L1, L2
-        self.right_markers: MarkerList = [(5.0, 5.0), (95.0, 95.0)]  # R1, R2
+        self.left_markers: MarkerList = []  # L1, L2
+        self.right_markers: MarkerList = []  # R1, R2
         self.active_marker: Optional[Tuple[str, int]] = None  # (side, index)
         self.left_result: Optional[ImageArray] = None
         self.right_result: Optional[ImageArray] = None
@@ -613,7 +613,7 @@ class ImageComparisonApp:
             print(f"已保存坐标到文件: {coord_file}")
             print(f"左图坐标: L1({int(self.left_markers[0][0])}, {int(self.left_markers[0][1])}), L2({int(self.left_markers[1][0])}, {int(self.left_markers[1][1])})")
             print(f"右图坐标: R1({int(self.right_markers[0][0])}, {int(self.right_markers[0][1])}), R2({int(self.right_markers[1][0])}, {int(self.right_markers[1][1])})")
-            print("注意：坐标值为像素值")
+            print("注意：坐标值为像素值，表示在图像中的实际位置")
         except Exception as e:
             print(f"保存坐标文件失败: {str(e)}")
             return
@@ -664,12 +664,51 @@ class ImageComparisonApp:
             if side == "left":
                 self.left_image = image
                 if self.left_canvas:
+                    # 先显示图像
                     self.display_image(self.left_canvas, image, self.left_markers)
+                    # 强制更新画布
+                    self.left_canvas.update_idletasks()
+                    # 设置左图默认校准点
+                    self.left_markers = [(50, 50), (image.shape[1] - 1, image.shape[0] - 1)]  # L1在(50,50)，L2在右下角
+                    # 重新显示带标记点的图像
+                    self.display_image(self.left_canvas, image, self.left_markers)
+                    self.left_canvas.update_idletasks()
             else:
                 self.right_image = image
                 if self.right_canvas:
+                    # 先显示图像
                     self.display_image(self.right_canvas, image, self.right_markers)
+                    # 强制更新画布
+                    self.right_canvas.update_idletasks()
+                    # 设置右图默认校准点
+                    self.right_markers = [(50, 50), (image.shape[1] - 1, image.shape[0] - 1)]  # R1在(50,50)，R2在右下角
+                    # 重新显示带标记点的图像
+                    self.display_image(self.right_canvas, image, self.right_markers)
+                    self.right_canvas.update_idletasks()
 
+            # 如果两张图都已加载，比较尺寸并更新L2和R2的坐标到相同的相对位置
+            if self.left_image is not None and self.right_image is not None:
+                # 获取较小的尺寸
+                min_width = min(self.left_image.shape[1], self.right_image.shape[1])
+                min_height = min(self.left_image.shape[0], self.right_image.shape[0])
+
+                # 计算L2和R2的相对位置（距离右下角50像素）
+                target_x = min_width - 50
+                target_y = min_height - 50
+
+                # 更新L2和R2的坐标到相同的相对位置
+                self.left_markers[1] = (target_x, target_y)
+                self.right_markers[1] = (target_x, target_y)
+
+                # 更新显示
+                if self.left_canvas:
+                    self.display_image(self.left_canvas, self.left_image, self.left_markers)
+                    self.left_canvas.update_idletasks()
+                if self.right_canvas:
+                    self.display_image(self.right_canvas, self.right_image, self.right_markers)
+                    self.right_canvas.update_idletasks()
+
+            # 更新坐标输入框
             self.update_coordinate_entries()
             self.show_info(f"已加载{side}图: {os.path.basename(file_path)}")
         except Exception as e:
@@ -683,6 +722,9 @@ class ImageComparisonApp:
             image: 要显示的图像数据
             markers: 要显示的标记点列表
         """
+        if image is None:
+            return
+
         # 获取画布尺寸
         canvas.update_idletasks()
         canvas_width = canvas.winfo_width()
@@ -693,11 +735,35 @@ class ImageComparisonApp:
             canvas_height = 300
             canvas.configure(width=canvas_width, height=canvas_height)
 
-        # 计算缩放比例
-        img_height, img_width = image.shape[:2]
-        scale = min(canvas_width / img_width, canvas_height / img_height)
-        new_width = int(img_width * scale)
-        new_height = int(img_height * scale)
+        # 获取两张图片中较大的尺寸
+        max_img_width = max(
+            self.left_image.shape[1] if self.left_image is not None else 0,
+            self.right_image.shape[1] if self.right_image is not None else 0
+        )
+        max_img_height = max(
+            self.left_image.shape[0] if self.left_image is not None else 0,
+            self.right_image.shape[0] if self.right_image is not None else 0
+        )
+
+        # 使用较大图片的尺寸计算统一的缩放比例
+        if max_img_width > 0 and max_img_height > 0:
+            scale = min(canvas_width / max_img_width, canvas_height / max_img_height)
+        else:
+            scale = 1.0
+
+        # 计算当前图片缩放后的尺寸
+        new_width = int(image.shape[1] * scale)
+        new_height = int(image.shape[0] * scale)
+
+        # 计算偏移量：左图靠右上角，右图靠左上角
+        if canvas == self.left_canvas:
+            # 左图靠右上角
+            offset_x = canvas_width - new_width
+            offset_y = 0
+        else:
+            # 右图靠左上角
+            offset_x = 0
+            offset_y = 0
 
         # 调整图像大小
         resized_image = cv_resize(image, (new_width, new_height))
@@ -705,8 +771,14 @@ class ImageComparisonApp:
 
         # 绘制标记点
         for i, (x, y) in enumerate(markers):
-            px = int(x * new_width / 100)
-            py = int(y * new_height / 100)
+            # 将像素坐标转换为画布坐标
+            px = int(x * scale)
+            py = int(y * scale)
+
+            # 确保坐标在画布范围内
+            px = max(0, min(new_width - 1, px))
+            py = max(0, min(new_height - 1, py))
+
             cv_drawMarker(rgb_image, (px, py), (255, 0, 0), MARKER_CROSS, 20, 2)
             cv_putText(rgb_image,
                      f"{'L' if canvas == self.left_canvas else 'R'}{i+1}",
@@ -717,7 +789,10 @@ class ImageComparisonApp:
         # 显示图像
         photo = ImageTk.PhotoImage(image=Image.fromarray(rgb_image))
         canvas.delete("all")  # 清除画布
-        canvas.create_image(0, 0, anchor=tk.NW, image=photo)
+
+        # 在偏移位置创建图像
+        canvas.create_image(offset_x, offset_y, anchor=tk.NW, image=photo)
+
         # 使用setattr来避免类型检查错误
         setattr(canvas, "_photo_ref", photo)
 
@@ -779,14 +854,20 @@ class ImageComparisonApp:
         else:
             image = self.left_image if side == "left" else self.right_image
 
+        if image is None:
+            return
+
         # 检查是否点击了标记点
         canvas_width = canvas.winfo_width()
         canvas_height = canvas.winfo_height()
-        x_rel = event.x / canvas_width * 100
-        y_rel = event.y / canvas_height * 100
+        img_height, img_width = image.shape[:2]
+
+        # 将画布坐标转换为图像坐标
+        x = int(event.x * img_width / canvas_width)
+        y = int(event.y * img_height / canvas_height)
 
         for i, (mx, my) in enumerate(markers):
-            if abs(x_rel - mx) < 5 and abs(y_rel - my) < 5:
+            if abs(x - mx) < 5 and abs(y - my) < 5:
                 self.active_marker = (side, i)
                 self.magnifier_visible = True
                 self.last_mouse_x = event.x
@@ -814,18 +895,28 @@ class ImageComparisonApp:
         else:
             image = self.left_image if side == "left" else self.right_image
 
+        if image is None:
+            return
+
         # 更新标记点位置
         canvas_width = canvas.winfo_width()
         canvas_height = canvas.winfo_height()
-        x_rel = min(max(event.x / canvas_width * 100, 0), 100)
-        y_rel = min(max(event.y / canvas_height * 100, 0), 100)
+        img_height, img_width = image.shape[:2]
 
-        markers[self.active_marker[1]] = (x_rel, y_rel)
+        # 将画布坐标转换为图像坐标
+        x = int(event.x * img_width / canvas_width)
+        y = int(event.y * img_height / canvas_height)
+
+        # 确保坐标在图像范围内
+        x = max(0, min(img_width - 1, x))
+        y = max(0, min(img_height - 1, y))
+
+        markers[self.active_marker[1]] = (x, y)
 
         # 更新显示
-        if side == "left" and image is not None:
+        if side == "left" and self.left_image is not None:
             self.display_image(self.left_canvas, image, self.left_markers)
-        elif side == "right" and image is not None:
+        elif side == "right" and self.right_image is not None:
             self.display_image(self.right_canvas, image, self.right_markers)
 
         # 更新放大镜
@@ -875,31 +966,7 @@ class ImageComparisonApp:
         print(f"当前坐标 - 左图: L1({int(self.left_markers[0][0])}, {int(self.left_markers[0][1])}), "
               f"L2({int(self.left_markers[1][0])}, {int(self.left_markers[1][1])})")
         print(f"当前坐标 - 右图: R1({int(self.right_markers[0][0])}, {int(self.right_markers[0][1])}), R2({int(self.right_markers[1][0])}, {int(self.right_markers[1][1])})")
-        self.l1_x.delete(0, tk.END)
-        self.l1_x.insert(0, str(int(self.left_markers[0][0])))
-        self.l1_y.delete(0, tk.END)
-        self.l1_y.insert(0, str(int(self.left_markers[0][1])))
-
-        self.l2_x.delete(0, tk.END)
-        self.l2_x.insert(0, str(int(self.left_markers[1][0])))
-        self.l2_y.delete(0, tk.END)
-        self.l2_y.insert(0, str(int(self.left_markers[1][1])))
-
-        # 更新右图坐标
-        self.r1_x.delete(0, tk.END)
-        self.r1_x.insert(0, str(int(self.right_markers[0][0])))
-        self.r1_y.delete(0, tk.END)
-        self.r1_y.insert(0, str(int(self.right_markers[0][1])))
-
-        self.r2_x.delete(0, tk.END)
-        self.r2_x.insert(0, str(int(self.right_markers[1][0])))
-        self.r2_y.delete(0, tk.END)
-        self.r2_y.insert(0, str(int(self.right_markers[1][1])))
-
-        # 打印当前坐标
-        print(f"当前坐标 - 左图: L1({int(self.left_markers[0][0])}, {int(self.left_markers[0][1])}), L2({int(self.left_markers[1][0])}, {int(self.left_markers[1][1])})")
-        print(f"当前坐标 - 右图: R1({int(self.right_markers[0][0])}, {int(self.right_markers[0][1])}), R2({int(self.right_markers[1][0])}, {int(self.right_markers[1][1])})")
-        print("注意：坐标值为像素值")
+        print("注意：坐标值为像素值，表示在图像中的实际位置")
 
     def update_magnifier(self, event: tk.Event, canvas: tk.Canvas, image: ImageArray) -> None:
         """更新放大镜显示
@@ -1154,9 +1221,15 @@ class ImageComparisonApp:
                     x = float(self.r2_x.get())
                     y = float(self.r2_y.get())
 
-            # 确保坐标值在有效范围内（0-100）
-            x = max(0, min(100, x))
-            y = max(0, min(100, y))
+            # 获取图像尺寸
+            image = self.left_image if side == "left" else self.right_image
+            if image is None:
+                return
+            img_height, img_width = image.shape[:2]
+
+            # 确保坐标值在图像范围内
+            x = max(0, min(img_width - 1, x))
+            y = max(0, min(img_height - 1, y))
 
             # 更新坐标
             if side == "left":

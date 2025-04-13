@@ -146,9 +146,8 @@ class ImageProcessor:
         return cv2.warpAffine(image, matrix, target_size)  # pylint: disable=no-member
 
     def normalize_coordinates(self, markers, image_shape):
-        """将相对坐标（百分比）转换为绝对坐标"""
-        height, width = image_shape[:2]
-        return [(int(x * width / 100), int(y * height / 100)) for x, y in markers]
+        """将坐标转换为像素坐标"""
+        return [(int(x), int(y)) for x, y in markers]
 
     def preprocess_images(self, left_image, right_image, left_markers, right_markers, mode="left"):
         """预处理两张图片，包括标准化坐标、缩放和对齐
