@@ -757,13 +757,20 @@ class ImageComparisonApp:
 
         # 计算偏移量：左图靠右上角，右图靠左上角
         if canvas == self.left_canvas:
-            # 左图靠右上角
             offset_x = canvas_width - new_width
             offset_y = 0
         else:
-            # 右图靠左上角
             offset_x = 0
             offset_y = 0
+
+        # 保存缩放和偏移信息到canvas
+        canvas.scale_info = {
+            'scale': scale,
+            'offset_x': offset_x,
+            'offset_y': offset_y,
+            'new_width': new_width,
+            'new_height': new_height
+        }
 
         # 调整图像大小
         resized_image = cv_resize(image, (new_width, new_height))
@@ -854,20 +861,27 @@ class ImageComparisonApp:
         else:
             image = self.left_image if side == "left" else self.right_image
 
-        if image is None:
+        if image is None or not hasattr(canvas, 'scale_info'):
             return
 
-        # 检查是否点击了标记点
-        canvas_width = canvas.winfo_width()
-        canvas_height = canvas.winfo_height()
-        img_height, img_width = image.shape[:2]
+        # 获取画布的缩放信息
+        scale_info = canvas.scale_info
+        scale = scale_info['scale']
+        offset_x = scale_info['offset_x']
+        offset_y = scale_info['offset_y']
 
         # 将画布坐标转换为图像坐标
-        x = int(event.x * img_width / canvas_width)
-        y = int(event.y * img_height / canvas_height)
+        x = int((event.x - offset_x) / scale)
+        y = int((event.y - offset_y) / scale)
 
+        # 检查是否点击了标记点（增加点击范围到10像素）
         for i, (mx, my) in enumerate(markers):
-            if abs(x - mx) < 5 and abs(y - my) < 5:
+            # 将标记点坐标转换为画布坐标
+            px = int(mx * scale) + offset_x
+            py = int(my * scale) + offset_y
+
+            # 检查点击位置是否在标记点附近
+            if abs(event.x - px) < 10 and abs(event.y - py) < 10:
                 self.active_marker = (side, i)
                 self.magnifier_visible = True
                 self.last_mouse_x = event.x
@@ -895,22 +909,24 @@ class ImageComparisonApp:
         else:
             image = self.left_image if side == "left" else self.right_image
 
-        if image is None:
+        if image is None or not hasattr(canvas, 'scale_info'):
             return
 
-        # 更新标记点位置
-        canvas_width = canvas.winfo_width()
-        canvas_height = canvas.winfo_height()
-        img_height, img_width = image.shape[:2]
+        # 获取画布的缩放信息
+        scale_info = canvas.scale_info
+        scale = scale_info['scale']
+        offset_x = scale_info['offset_x']
+        offset_y = scale_info['offset_y']
 
         # 将画布坐标转换为图像坐标
-        x = int(event.x * img_width / canvas_width)
-        y = int(event.y * img_height / canvas_height)
+        x = int((event.x - offset_x) / scale)
+        y = int((event.y - offset_y) / scale)
 
         # 确保坐标在图像范围内
-        x = max(0, min(img_width - 1, x))
-        y = max(0, min(img_height - 1, y))
+        x = max(0, min(image.shape[1] - 1, x))
+        y = max(0, min(image.shape[0] - 1, y))
 
+        # 更新标记点位置
         markers[self.active_marker[1]] = (x, y)
 
         # 更新显示
