@@ -73,7 +73,7 @@ class ImageComparisonApp:
 
         # 放大镜参数
         self.magnifier_size: int = 100  # 放大区域的大小
-        self.magnifier_scale: int = 2   # 放大倍数改为2倍
+        self.magnifier_scale: int = 4   # 放大倍数改为4倍
         self.magnifier_visible: bool = False
         self.last_mouse_x: int = 0
         self.last_mouse_y: int = 0
@@ -928,27 +928,33 @@ class ImageComparisonApp:
             canvas: 目标画布
             image: 要显示的图像（原图或比较结果）
         """
-        if not self.magnifier_visible or image is None:
+        if not self.magnifier_visible or image is None or not self.active_marker:
             return
 
-        # 获取鼠标位置对应的图像坐标
-        canvas_width = canvas.winfo_width()
-        canvas_height = canvas.winfo_height()
-        img_height, img_width = image.shape[:2]
+        # 获取画布的缩放信息
+        scale_info = self._get_scale_info(canvas)
+        if not scale_info:
+            return
 
-        # 计算图像上的实际位置
-        x = int(event.x * img_width / canvas_width)
-        y = int(event.y * img_height / canvas_height)
+        scale = scale_info['scale']
+        offset_x = int(scale_info['offset_x'])
+        offset_y = int(scale_info['offset_y'])
 
-        # 确定放大区域的范围
+        # 获取当前活动的标记点坐标
+        markers = self.left_markers if canvas == self.left_canvas else self.right_markers
+        marker_x, marker_y = markers[self.active_marker[1]]
+
+        # 计算放大区域的范围（以标记点为中心）
         half_size = self.magnifier_size // (2 * self.magnifier_scale)
-        x1 = max(0, x - half_size)
-        y1 = max(0, y - half_size)
-        x2 = min(img_width, x + half_size)
-        y2 = min(img_height, y + half_size)
+        img_x = int(marker_x - half_size)
+        img_y = int(marker_y - half_size)
+
+        # 确保范围在图像内
+        img_x = max(0, min(img_x, image.shape[1] - 2 * half_size))
+        img_y = max(0, min(img_y, image.shape[0] - 2 * half_size))
 
         # 提取放大区域
-        roi = image[y1:y2, x1:x2].copy()
+        roi = image[img_y:img_y + 2 * half_size, img_x:img_x + 2 * half_size].copy()
         if roi.size == 0:
             return
 
@@ -959,7 +965,7 @@ class ImageComparisonApp:
 
         # 在放大的图像中心绘制十字线
         center = self.magnifier_size // 2
-        cv_drawMarker(roi, (center, center), (255, 0, 0), MARKER_CROSS, 20, 1)
+        cv_drawMarker(roi, (center, center), (255, 0, 0), MARKER_CROSS, 30, 2)
 
         # 创建或更新放大镜窗口
         if not hasattr(self, 'magnifier_window') or not self.magnifier_window:
@@ -970,11 +976,33 @@ class ImageComparisonApp:
                                            height=self.magnifier_size)
             self.magnifier_canvas.pack()
 
-        # 更新放大镜位置
-        screen_x = self.root.winfo_rootx() + canvas.winfo_x() + event.x
-        screen_y = self.root.winfo_rooty() + canvas.winfo_y() + event.y
+        # 将标记点坐标转换为画布坐标
+        canvas_x = int(marker_x * scale) + offset_x
+        canvas_y = int(marker_y * scale) + offset_y
+
+        # 计算放大镜窗口在屏幕上的位置（确保使用整数坐标）
+        root_x = int(self.root.winfo_rootx())
+        root_y = int(self.root.winfo_rooty())
+        canvas_root_x = int(canvas.winfo_x())
+        canvas_root_y = int(canvas.winfo_y())
+
+        screen_x = root_x + canvas_root_x + canvas_x
+        screen_y = root_y + canvas_root_y + canvas_y
+
         if self.magnifier_window:
-            self.magnifier_window.geometry(f"{self.magnifier_size}x{self.magnifier_size}+{screen_x+20}+{screen_y+20}")
+            # 调整放大镜位置，使其不遮挡标记点
+            if canvas == self.left_canvas:
+                # 左侧画布：放大镜显示在右侧
+                magnifier_x = screen_x + 20
+            else:
+                # 右侧画布：放大镜显示在左侧
+                magnifier_x = screen_x - self.magnifier_size - 20
+
+            magnifier_y = screen_y - self.magnifier_size // 2
+
+            # 确保所有坐标都是整数
+            geometry_str = f"{self.magnifier_size}x{self.magnifier_size}+{int(magnifier_x)}+{int(magnifier_y)}"
+            self.magnifier_window.geometry(geometry_str)
 
             # 显示放大的图像
             if self.magnifier_canvas:
