@@ -93,8 +93,9 @@ class ImageComparisonApp:
         self.comparison_cache: List[CacheItem] = []
         self.cache_index: int = -1
 
+        # 初始化UI
         self.setup_ui()
-        self.bind_shortcuts()    # 绑定快捷键
+        self.bind_shortcuts()
 
         # 在窗口尺寸确定后自动加载图片
         self.root.after(100, self.auto_load_images)
@@ -406,9 +407,6 @@ class ImageComparisonApp:
             mode = self.mode_var.get()
             print(f"比较模式: {mode}")
 
-            # 获取最新的校准坐标
-            self.save_current_coordinates()
-
             # 检查图像和坐标的有效性
             if self.left_image is None or self.right_image is None:
                 print("错误：图像未加载")
@@ -565,89 +563,14 @@ class ImageComparisonApp:
 
     def load_current_images(self):
         """加载当前索引位置的图片"""
-        # 保存当前坐标
-        self.save_current_coordinates()
-
         if 0 <= self.current_index < len(self.left_images):
             self.load_image("left", self.left_images[self.current_index])
         if 0 <= self.current_index < len(self.right_images):
             self.load_image("right", self.right_images[self.current_index])
 
-        # 恢复保存的坐标
-        self.restore_coordinates()
-
         # 更新导航信息
         if self.left_images and self.right_images:
             self.nav_label.config(text=f"当前图片: {self.current_index + 1}/{min(len(self.left_images), len(self.right_images))}")
-
-    def save_current_coordinates(self):
-        """保存当前坐标到文件（像素值）"""
-        if self.left_image is None or self.right_image is None:
-            return
-
-        # 获取当前图片文件名
-        left_filename = os.path.basename(self.left_images[self.current_index])
-        right_filename = os.path.basename(self.right_images[self.current_index])
-
-        # 确保coords目录存在
-        coords_dir = "coords"
-        if not os.path.exists(coords_dir):
-            try:
-                os.makedirs(coords_dir)
-                print(f"创建目录: {coords_dir}")
-            except Exception as e:
-                print(f"创建目录失败: {str(e)}")
-                return
-
-        # 创建坐标文件
-        coord_file = os.path.join(coords_dir, f"{left_filename}.txt")
-
-        try:
-            # 保存坐标（像素值）
-            with open(coord_file, 'w') as f:
-                f.write(f"L1: {int(self.left_markers[0][0])} {int(self.left_markers[0][1])}\n")
-                f.write(f"L2: {int(self.left_markers[1][0])} {int(self.left_markers[1][1])}\n")
-                f.write(f"R1: {int(self.right_markers[0][0])} {int(self.right_markers[0][1])}\n")
-                f.write(f"R2: {int(self.right_markers[1][0])} {int(self.right_markers[1][1])}\n")
-
-            print(f"已保存坐标到文件: {coord_file}")
-            print(f"左图坐标: L1({int(self.left_markers[0][0])}, {int(self.left_markers[0][1])}), L2({int(self.left_markers[1][0])}, {int(self.left_markers[1][1])})")
-            print(f"右图坐标: R1({int(self.right_markers[0][0])}, {int(self.right_markers[0][1])}), R2({int(self.right_markers[1][0])}, {int(self.right_markers[1][1])})")
-            print("注意：坐标值为像素值，表示在图像中的实际位置")
-        except Exception as e:
-            print(f"保存坐标文件失败: {str(e)}")
-            return
-
-    def restore_coordinates(self):
-        """恢复保存的坐标值"""
-        self.update_coordinate_entries()
-
-    def bind_shortcuts(self):
-        """绑定快捷键"""
-        self.root.bind("<Prior>", lambda e: self.navigate_images(-1))  # PgUp
-        self.root.bind("<Next>", lambda e: self.navigate_images(1))    # PgDn
-        self.root.bind("<Alt-q>", lambda e: self.toggle_compare())  # Alt+Q
-        self.root.bind("<Control-Left>", lambda e: self.view_cache(-1))  # Ctrl+Left
-        self.root.bind("<Control-Right>", lambda e: self.view_cache(1))  # Ctrl+Right
-
-    def navigate_images(self, direction):
-        """导航到上一张或下一张图片"""
-        if not self.left_images or not self.right_images:
-            return
-
-        new_index = self.current_index + direction
-        if 0 <= new_index < min(len(self.left_images), len(self.right_images)):
-            # 更新索引
-            self.current_index = new_index
-
-            # 加载新图片
-            self.load_current_images()
-
-            # 如果当前处于比较状态，开始比较
-            if self.is_comparing:
-                # 先检查是否有可用的缓存
-                if not self.check_and_use_cache():
-                    self.start_comparison()
 
     def load_image(self, side: str, file_path: str) -> None:
         """加载图片
@@ -663,52 +586,22 @@ class ImageComparisonApp:
 
             if side == "left":
                 self.left_image = image
+                # 如果是第一次加载图片，初始化标记点
+                if not self.left_markers:
+                    self.left_markers = [(50, 50), (image.shape[1] - 50, image.shape[0] - 50)]
                 if self.left_canvas:
-                    # 先显示图像
-                    self.display_image(self.left_canvas, image, self.left_markers)
-                    # 强制更新画布
-                    self.left_canvas.update_idletasks()
-                    # 设置左图默认校准点
-                    self.left_markers = [(50, 50), (image.shape[1] - 1, image.shape[0] - 1)]  # L1在(50,50)，L2在右下角
-                    # 重新显示带标记点的图像
                     self.display_image(self.left_canvas, image, self.left_markers)
                     self.left_canvas.update_idletasks()
             else:
                 self.right_image = image
+                # 如果是第一次加载图片，初始化标记点
+                if not self.right_markers:
+                    self.right_markers = [(50, 50), (image.shape[1] - 50, image.shape[0] - 50)]
                 if self.right_canvas:
-                    # 先显示图像
-                    self.display_image(self.right_canvas, image, self.right_markers)
-                    # 强制更新画布
-                    self.right_canvas.update_idletasks()
-                    # 设置右图默认校准点
-                    self.right_markers = [(50, 50), (image.shape[1] - 1, image.shape[0] - 1)]  # R1在(50,50)，R2在右下角
-                    # 重新显示带标记点的图像
                     self.display_image(self.right_canvas, image, self.right_markers)
                     self.right_canvas.update_idletasks()
 
-            # 如果两张图都已加载，比较尺寸并更新L2和R2的坐标到相同的相对位置
-            if self.left_image is not None and self.right_image is not None:
-                # 获取较小的尺寸
-                min_width = min(self.left_image.shape[1], self.right_image.shape[1])
-                min_height = min(self.left_image.shape[0], self.right_image.shape[0])
-
-                # 计算L2和R2的相对位置（距离右下角50像素）
-                target_x = min_width - 50
-                target_y = min_height - 50
-
-                # 更新L2和R2的坐标到相同的相对位置
-                self.left_markers[1] = (target_x, target_y)
-                self.right_markers[1] = (target_x, target_y)
-
-                # 更新显示
-                if self.left_canvas:
-                    self.display_image(self.left_canvas, self.left_image, self.left_markers)
-                    self.left_canvas.update_idletasks()
-                if self.right_canvas:
-                    self.display_image(self.right_canvas, self.right_image, self.right_markers)
-                    self.right_canvas.update_idletasks()
-
-            # 更新坐标输入框
+            # 更新坐标输入框显示
             self.update_coordinate_entries()
             self.show_info(f"已加载{side}图: {os.path.basename(file_path)}")
         except Exception as e:
@@ -745,9 +638,16 @@ class ImageComparisonApp:
             self.right_image.shape[0] if self.right_image is not None else 0
         )
 
-        # 使用较大图片的尺寸计算统一的缩放比例
+        # 计算两个画布的总宽度（减去边距）
+        total_canvas_width = self.left_canvas.winfo_width() + self.right_canvas.winfo_width()
+
+        # 使用较大图片的尺寸和总画布宽度计算统一的缩放比例
         if max_img_width > 0 and max_img_height > 0:
-            scale = min(canvas_width / max_img_width, canvas_height / max_img_height)
+            # 计算水平和垂直方向的缩放比例
+            scale_w = total_canvas_width / (2 * max_img_width)  # 除以2因为有两个画布
+            scale_h = canvas_height / max_img_height
+            # 使用较小的缩放比例以确保图像完全显示
+            scale = min(scale_w, scale_h)
         else:
             scale = 1.0
 
@@ -755,22 +655,26 @@ class ImageComparisonApp:
         new_width = int(image.shape[1] * scale)
         new_height = int(image.shape[0] * scale)
 
-        # 计算偏移量：左图靠右上角，右图靠左上角
+        # 计算偏移量，使图像在画布中居中
         if canvas == self.left_canvas:
-            offset_x = canvas_width - new_width
-            offset_y = 0
+            offset_x = canvas_width - new_width  # 靠右对齐
+            offset_y = (canvas_height - new_height) // 2  # 垂直居中
         else:
-            offset_x = 0
-            offset_y = 0
+            offset_x = 0  # 靠左对齐
+            offset_y = (canvas_height - new_height) // 2  # 垂直居中
 
-        # 保存缩放和偏移信息到canvas
-        canvas.scale_info = {
-            'scale': scale,
-            'offset_x': offset_x,
-            'offset_y': offset_y,
-            'new_width': new_width,
-            'new_height': new_height
-        }
+        # 清除所有图像相关的内容，但保留scale_info
+        for item in canvas.find_all():
+            if "scale_info" not in canvas.gettags(item):
+                canvas.delete(item)
+
+        # 更新缩放和偏移信息
+        scale_items = canvas.find_withtag("scale_info")
+        if scale_items:
+            canvas.itemconfig(scale_items[0], text=f"{scale},{offset_x},{offset_y},{new_width},{new_height}")
+        else:
+            canvas.create_text(0, 0, text=f"{scale},{offset_x},{offset_y},{new_width},{new_height}",
+                             tags="scale_info", state="hidden")
 
         # 调整图像大小
         resized_image = cv_resize(image, (new_width, new_height))
@@ -779,29 +683,55 @@ class ImageComparisonApp:
         # 绘制标记点
         for i, (x, y) in enumerate(markers):
             # 将像素坐标转换为画布坐标
-            px = int(x * scale)
-            py = int(y * scale)
+            px = int(x * scale) + offset_x
+            py = int(y * scale) + offset_y
 
             # 确保坐标在画布范围内
-            px = max(0, min(new_width - 1, px))
-            py = max(0, min(new_height - 1, py))
+            px = max(offset_x, min(offset_x + new_width - 1, px))
+            py = max(offset_y, min(offset_y + new_height - 1, py))
 
-            cv_drawMarker(rgb_image, (px, py), (255, 0, 0), MARKER_CROSS, 20, 2)
+            cv_drawMarker(rgb_image, (int((px - offset_x)), int((py - offset_y))), (255, 0, 0), MARKER_CROSS, 20, 2)
             cv_putText(rgb_image,
                      f"{'L' if canvas == self.left_canvas else 'R'}{i+1}",
-                     (px+5, py-5),
+                     (int((px - offset_x))+5, int((py - offset_y))-5),
                      FONT_HERSHEY_SIMPLEX,
                      0.5, (255, 0, 0), 1)
 
         # 显示图像
         photo = ImageTk.PhotoImage(image=Image.fromarray(rgb_image))
-        canvas.delete("all")  # 清除画布
-
-        # 在偏移位置创建图像
-        canvas.create_image(offset_x, offset_y, anchor=tk.NW, image=photo)
+        canvas.create_image(offset_x, offset_y, anchor=tk.NW, image=photo, tags="image")
 
         # 使用setattr来避免类型检查错误
         setattr(canvas, "_photo_ref", photo)
+
+    def _get_scale_info(self, canvas: tk.Canvas) -> Optional[Dict[str, float]]:
+        """从canvas的tag中获取缩放信息
+
+        Args:
+            canvas: 目标画布
+
+        Returns:
+            包含缩放信息的字典，如果没有找到则返回None
+        """
+        scale_items = canvas.find_withtag("scale_info")
+        if not scale_items:
+            return None
+
+        scale_text = canvas.itemcget(scale_items[0], "text")
+        if not scale_text:
+            return None
+
+        try:
+            scale, offset_x, offset_y, new_width, new_height = map(float, scale_text.split(","))
+            return {
+                'scale': scale,
+                'offset_x': offset_x,
+                'offset_y': offset_y,
+                'new_width': new_width,
+                'new_height': new_height
+            }
+        except (ValueError, IndexError):
+            return None
 
     def on_left_click(self, event):
         """处理左图点击事件"""
@@ -861,27 +791,29 @@ class ImageComparisonApp:
         else:
             image = self.left_image if side == "left" else self.right_image
 
-        if image is None or not hasattr(canvas, 'scale_info'):
+        if image is None:
             return
 
         # 获取画布的缩放信息
-        scale_info = canvas.scale_info
+        scale_info = self._get_scale_info(canvas)
+        if not scale_info:
+            return
+
         scale = scale_info['scale']
         offset_x = scale_info['offset_x']
         offset_y = scale_info['offset_y']
 
-        # 将画布坐标转换为图像坐标
-        x = int((event.x - offset_x) / scale)
-        y = int((event.y - offset_y) / scale)
-
-        # 检查是否点击了标记点（增加点击范围到10像素）
+        # 检查是否点击了标记点（增加点击范围到15像素）
         for i, (mx, my) in enumerate(markers):
             # 将标记点坐标转换为画布坐标
             px = int(mx * scale) + offset_x
             py = int(my * scale) + offset_y
 
             # 检查点击位置是否在标记点附近
-            if abs(event.x - px) < 10 and abs(event.y - py) < 10:
+            if abs(event.x - px) < 15 and abs(event.y - py) < 15:
+                print(f"开始拖动 {'L' if side == 'left' else 'R'}{i+1} 标记点")
+                print(f"点击位置: ({event.x}, {event.y})")
+                print(f"标记点位置: ({px}, {py})")
                 self.active_marker = (side, i)
                 self.magnifier_visible = True
                 self.last_mouse_x = event.x
@@ -909,11 +841,14 @@ class ImageComparisonApp:
         else:
             image = self.left_image if side == "left" else self.right_image
 
-        if image is None or not hasattr(canvas, 'scale_info'):
+        if image is None:
             return
 
         # 获取画布的缩放信息
-        scale_info = canvas.scale_info
+        scale_info = self._get_scale_info(canvas)
+        if not scale_info:
+            return
+
         scale = scale_info['scale']
         offset_x = scale_info['offset_x']
         offset_y = scale_info['offset_y']
@@ -928,6 +863,7 @@ class ImageComparisonApp:
 
         # 更新标记点位置
         markers[self.active_marker[1]] = (x, y)
+        print(f"拖动 {'L' if side == 'left' else 'R'}{self.active_marker[1]+1} 到 ({x}, {y})")
 
         # 更新显示
         if side == "left" and self.left_image is not None:
@@ -1291,6 +1227,33 @@ class ImageComparisonApp:
             print(f"坐标值无效: {str(e)}")
             # 恢复原来的值
             self.update_coordinate_entries()
+
+    def navigate_images(self, direction):
+        """导航到上一张或下一张图片"""
+        if not self.left_images or not self.right_images:
+            return
+
+        new_index = self.current_index + direction
+        if 0 <= new_index < min(len(self.left_images), len(self.right_images)):
+            # 更新索引
+            self.current_index = new_index
+
+            # 加载新图片，保持当前标记点位置不变
+            self.load_current_images()
+
+            # 如果当前处于比较状态，开始比较
+            if self.is_comparing:
+                # 先检查是否有可用的缓存
+                if not self.check_and_use_cache():
+                    self.start_comparison()
+
+    def bind_shortcuts(self):
+        """绑定快捷键"""
+        self.root.bind("<Prior>", lambda e: self.navigate_images(-1))  # PgUp
+        self.root.bind("<Next>", lambda e: self.navigate_images(1))    # PgDn
+        self.root.bind("<Alt-q>", lambda e: self.toggle_compare())  # Alt+Q
+        self.root.bind("<Control-Left>", lambda e: self.view_cache(-1))  # Ctrl+Left
+        self.root.bind("<Control-Right>", lambda e: self.view_cache(1))  # Ctrl+Right
 
 if __name__ == "__main__":
     root = tk.Tk()
