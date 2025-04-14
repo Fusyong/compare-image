@@ -1010,7 +1010,7 @@ class ImageComparisonApp:
                 magnifier_x = screen_x + 20
             else:
                 # 右侧画布：放大器显示在左侧
-                magnifier_x = screen_x - self.marker_magnifier_size - 20
+                magnifier_x = screen_x - 20
 
             magnifier_y = screen_y - self.marker_magnifier_size // 2
 
@@ -1290,6 +1290,9 @@ class ImageComparisonApp:
             # 如果正在比较状态，重新比较
             if self.is_comparing:
                 self.start_comparison()
+
+            # 更新放大镜位置
+            self.show_marker_magnifier(side, index)
 
         except ValueError as e:
             print(f"坐标值无效: {str(e)}")
