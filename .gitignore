@@ -6,4 +6,5 @@
 *.tiff
 *.ico
 coords
+__pycache__
 

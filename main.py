@@ -174,6 +174,11 @@ class ImageComparisonApp:
         # 绑定回车键事件
         self.l1_x.bind("<Return>", lambda e: self.update_marker_coordinates("left", 0))
         self.l1_y.bind("<Return>", lambda e: self.update_marker_coordinates("left", 0))
+        # 绑定焦点事件
+        self.l1_x.bind("<FocusIn>", lambda e: self.show_marker_magnifier("left", 0))
+        self.l1_y.bind("<FocusIn>", lambda e: self.show_marker_magnifier("left", 0))
+        self.l1_x.bind("<FocusOut>", self.hide_marker_magnifier)
+        self.l1_y.bind("<FocusOut>", self.hide_marker_magnifier)
 
         l2_frame = ttk.Frame(left_coords)
         l2_frame.pack(fill=tk.X)
@@ -185,6 +190,11 @@ class ImageComparisonApp:
         # 绑定回车键事件
         self.l2_x.bind("<Return>", lambda e: self.update_marker_coordinates("left", 1))
         self.l2_y.bind("<Return>", lambda e: self.update_marker_coordinates("left", 1))
+        # 绑定焦点事件
+        self.l2_x.bind("<FocusIn>", lambda e: self.show_marker_magnifier("left", 1))
+        self.l2_y.bind("<FocusIn>", lambda e: self.show_marker_magnifier("left", 1))
+        self.l2_x.bind("<FocusOut>", self.hide_marker_magnifier)
+        self.l2_y.bind("<FocusOut>", self.hide_marker_magnifier)
 
         # 右图坐标
         right_coords = ttk.Frame(coords_frame)
@@ -201,6 +211,11 @@ class ImageComparisonApp:
         # 绑定回车键事件
         self.r1_x.bind("<Return>", lambda e: self.update_marker_coordinates("right", 0))
         self.r1_y.bind("<Return>", lambda e: self.update_marker_coordinates("right", 0))
+        # 绑定焦点事件
+        self.r1_x.bind("<FocusIn>", lambda e: self.show_marker_magnifier("right", 0))
+        self.r1_y.bind("<FocusIn>", lambda e: self.show_marker_magnifier("right", 0))
+        self.r1_x.bind("<FocusOut>", self.hide_marker_magnifier)
+        self.r1_y.bind("<FocusOut>", self.hide_marker_magnifier)
 
         r2_frame = ttk.Frame(right_coords)
         r2_frame.pack(fill=tk.X)
@@ -212,6 +227,11 @@ class ImageComparisonApp:
         # 绑定回车键事件
         self.r2_x.bind("<Return>", lambda e: self.update_marker_coordinates("right", 1))
         self.r2_y.bind("<Return>", lambda e: self.update_marker_coordinates("right", 1))
+        # 绑定焦点事件
+        self.r2_x.bind("<FocusIn>", lambda e: self.show_marker_magnifier("right", 1))
+        self.r2_y.bind("<FocusIn>", lambda e: self.show_marker_magnifier("right", 1))
+        self.r2_x.bind("<FocusOut>", self.hide_marker_magnifier)
+        self.r2_y.bind("<FocusOut>", self.hide_marker_magnifier)
 
         # 添加模式选择 - 移到坐标输入区域后面
         mode_frame = ttk.LabelFrame(toolbar, text="比较模式")
@@ -1005,6 +1025,16 @@ class ImageComparisonApp:
                 self.marker_magnifier_canvas.create_image(0, 0, anchor=tk.NW, image=photo)
                 setattr(self.marker_magnifier_canvas, "_photo_ref", photo)
 
+    def hide_marker_magnifier(self, event=None) -> None:
+        """隐藏标记点放大器"""
+        self.active_marker = None
+        self.marker_magnifier_visible = False
+        # 清除标记点放大器
+        if hasattr(self, 'marker_magnifier_window') and self.marker_magnifier_window is not None:
+            self.marker_magnifier_window.destroy()
+            self.marker_magnifier_window = None
+            self.marker_magnifier_canvas = None
+
     def view_cache(self, direction):
         """查看缓存的比较结果"""
         if not self.comparison_cache:
@@ -1291,6 +1321,55 @@ class ImageComparisonApp:
         self.root.bind("<Next>", lambda e: self.navigate_images(1))    # PgDn
         self.root.bind("<Alt-q>", lambda e: self.toggle_compare())  # Alt+Q
         self.root.bind("<Alt-z>", lambda e: self.toggle_zoom_mode())  # Alt+Z
+
+    def show_marker_magnifier(self, side: str, index: int) -> None:
+        """显示标记点放大器
+
+        Args:
+            side: 图像侧（"left" 或 "right"）
+            index: 标记点索引（0 或 1）
+        """
+        canvas = self.left_canvas if side == "left" else self.right_canvas
+        image = self.left_image if side == "left" else self.right_image
+        markers = self.left_markers if side == "left" else self.right_markers
+
+        if image is None or not markers:
+            return
+
+        # 设置活动标记点
+        self.active_marker = (side, index)
+        self.marker_magnifier_visible = True
+
+        # 创建一个虚拟事件来更新放大镜
+        class DummyEvent(tk.Event):
+            def __init__(self, x, y):
+                super().__init__()
+                self.x = x
+                self.y = y
+
+        # 获取标记点坐标
+        marker_x, marker_y = markers[index]
+
+        # 获取画布的缩放信息
+        scale_info = self._get_scale_info(canvas)
+        if not scale_info:
+            return
+
+        scale = scale_info['scale']
+        offset_x = int(scale_info['offset_x'])
+        offset_y = int(scale_info['offset_y'])
+
+        # 将标记点坐标转换为画布坐标
+        canvas_x = int(marker_x * scale) + offset_x
+        canvas_y = int(marker_y * scale) + offset_y
+
+        # 创建虚拟事件
+        event = DummyEvent(canvas_x, canvas_y)
+        self.last_mouse_x = canvas_x
+        self.last_mouse_y = canvas_y
+
+        # 更新放大镜
+        self.update_marker_magnifier(event, canvas, image)
 
 if __name__ == "__main__":
     root = tk.Tk()
