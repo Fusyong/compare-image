@@ -220,9 +220,9 @@ class ImageComparisonApp:
         # 模式选择 - 第一行
         mode_select_frame = ttk.Frame(mode_frame)
         mode_select_frame.pack(fill=tk.X, padx=5, pady=2)
-        self.mode_var = tk.StringVar(value="compare")
-        ttk.Radiobutton(mode_select_frame, text="像素", variable=self.mode_var, value="compare").pack(side=tk.LEFT, padx=5)
+        self.mode_var = tk.StringVar(value="overlay")
         ttk.Radiobutton(mode_select_frame, text="叠加", variable=self.mode_var, value="overlay").pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(mode_select_frame, text="像素", variable=self.mode_var, value="compare").pack(side=tk.LEFT, padx=5)
         ttk.Radiobutton(mode_select_frame, text="OCR", variable=self.mode_var, value="ocr").pack(side=tk.LEFT, padx=5)
 
         # 叠加模式的透明度控制 - 第二行
