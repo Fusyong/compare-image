@@ -829,9 +829,6 @@ class ImageComparisonApp:
 
             # 检查点击位置是否在标记点附近
             if abs(event.x - px) < 15 and abs(event.y - py) < 15:
-                print(f"开始拖动 {'L' if side == 'left' else 'R'}{i+1} 标记点")
-                print(f"点击位置: ({event.x}, {event.y})")
-                print(f"标记点位置: ({px}, {py})")
                 self.active_marker = (side, i)
                 self.marker_magnifier_visible = True
                 self.last_mouse_x = event.x
@@ -881,7 +878,6 @@ class ImageComparisonApp:
 
         # 更新标记点位置
         markers[self.active_marker[1]] = (x, y)
-        print(f"拖动 {'L' if side == 'left' else 'R'}{self.active_marker[1]+1} 到 ({x}, {y})")
 
         # 更新显示
         if side == "left" and self.left_image is not None:
@@ -1278,8 +1274,6 @@ class ImageComparisonApp:
                     self.r2_x.insert(0, str(int(x)))
                     self.r2_y.delete(0, tk.END)
                     self.r2_y.insert(0, str(int(y)))
-
-            print(f"更新坐标 - {side}图: {'L' if side == 'left' else 'R'}{index+1}({x}, {y})")
 
             # 更新图像显示
             if side == "left" and self.left_image is not None:
