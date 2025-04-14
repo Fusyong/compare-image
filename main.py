@@ -315,13 +315,6 @@ class ImageComparisonApp:
                 self.left_markers == left_markers and
                 self.right_markers == right_markers):
 
-                print("\n=== 使用缓存的比较结果 ===")
-                print(f"比较模式: {self.mode_var.get()}")
-                print(f"左图坐标: L1({self.left_markers[0][0]:.1f}, {self.left_markers[0][1]:.1f}), "
-                      f"L2({self.left_markers[1][0]:.1f}, {self.left_markers[1][1]:.1f})")
-                print(f"右图坐标: R1({self.right_markers[0][0]:.1f}, {self.right_markers[0][1]:.1f}), "
-                      f"R2({self.right_markers[1][0]:.1f}, {self.right_markers[1][1]:.1f})")
-
                 # 使用缓存的比较结果
                 left_result = current_cache.get("left")
                 right_result = current_cache.get("right")
@@ -419,15 +412,6 @@ class ImageComparisonApp:
                 print("错误：标记点无效")
                 self.show_info("请先设置有效的标记点")
                 return
-
-            # 打印详细的比较信息
-            print("=== 比较参数 ===")
-            print(f"左图尺寸: {self.left_image.shape}")
-            print(f"右图尺寸: {self.right_image.shape}")
-            print(f"左图标记点: L1({self.left_markers[0][0]:.1f}, {self.left_markers[0][1]:.1f}), "
-                  f"L2({self.left_markers[1][0]:.1f}, {self.left_markers[1][1]:.1f})")
-            print(f"右图标记点: R1({self.right_markers[0][0]:.1f}, {self.right_markers[0][1]:.1f}), "
-                  f"R2({self.right_markers[1][0]:.1f}, {self.right_markers[1][1]:.1f})")
 
             # 执行比较
             print("\n=== 执行比较 ===")
@@ -929,12 +913,6 @@ class ImageComparisonApp:
         ]:
             entry.delete(0, tk.END)
             entry.insert(0, str(int(value)))
-
-        # 打印当前坐标
-        print(f"当前坐标 - 左图: L1({int(self.left_markers[0][0])}, {int(self.left_markers[0][1])}), "
-              f"L2({int(self.left_markers[1][0])}, {int(self.left_markers[1][1])})")
-        print(f"当前坐标 - 右图: R1({int(self.right_markers[0][0])}, {int(self.right_markers[0][1])}), R2({int(self.right_markers[1][0])}, {int(self.right_markers[1][1])})")
-        print("注意：坐标值为像素值，表示在图像中的实际位置")
 
     def update_marker_magnifier(self, event: tk.Event, canvas: tk.Canvas, image: ImageArray) -> None:
         """更新标记点放大器显示
