@@ -373,7 +373,6 @@ class ImageComparisonApp:
                     cache.get("right_path") == self.right_images[self.current_index]
                 )]
 
-        print("\n=== 需要重新比较 ===")
         return False
 
     def toggle_compare(self):
@@ -432,9 +431,7 @@ class ImageComparisonApp:
         比较结果会被缓存，并在界面上显示。
         """
         try:
-            print("\n=== 开始新的比较 ===")
             mode = self.mode_var.get()
-            print(f"比较模式: {mode}")
 
             # 检查图像和坐标的有效性
             if self.left_image is None or self.right_image is None:
@@ -448,9 +445,7 @@ class ImageComparisonApp:
                 return
 
             # 执行比较
-            print("\n=== 执行比较 ===")
             if mode == "compare":
-                print("使用像素比较模式")
                 self.left_result = self.processor.compare_images(
                     self.left_image, self.right_image,
                     self.left_markers, self.right_markers,
@@ -462,7 +457,6 @@ class ImageComparisonApp:
                     "right"
                 )
             elif mode == "overlay":
-                print("使用叠加比较模式")
                 try:
                     alpha = float(self.alpha_entry.get()) / 100.0 if self.alpha_entry else 0.5
                     print(f"叠加透明度: {alpha:.2f}")
@@ -480,7 +474,6 @@ class ImageComparisonApp:
                     "right", alpha
                 )
             else:  # ocr mode
-                print("使用OCR比较模式")
                 self.left_result = self.processor.ocr_and_compare(
                     self.left_image, self.right_image,
                     self.left_markers, self.right_markers,
@@ -493,14 +486,11 @@ class ImageComparisonApp:
                 )
 
             # 检查比较结果
-            print("\n=== 比较结果 ===")
             if self.left_result is None or self.right_result is None:
-                print("错误：比较结果为空")
                 self.show_info("比较失败，请检查图像和标记点")
                 return
 
             # 缓存比较结果
-            print("缓存比较结果")
             cache_item: CacheItem = {
                 "left": self.left_result.copy() if self.left_result is not None else None,
                 "right": self.right_result.copy() if self.right_result is not None else None,
@@ -527,7 +517,6 @@ class ImageComparisonApp:
             self.cache_index = -1
 
             # 显示结果
-            print("显示比较结果")
             if self.left_result is not None and self.left_canvas:
                 self.display_image(self.left_canvas, self.left_result, self.left_markers)
             if self.right_result is not None and self.right_canvas:
@@ -541,8 +530,6 @@ class ImageComparisonApp:
                     self.show_info("已标记出差异区域并生成HTML报告")
             else:
                 self.show_info("比较完成")
-
-            print("=== 比较完成 ===\n")
 
         except Exception as e:
             import traceback
@@ -1198,42 +1185,49 @@ class ImageComparisonApp:
             self.area_magnifier_window = tk.Toplevel(self.root)
             self.area_magnifier_window.title("区域放大器")
             self.area_magnifier_window.protocol("WM_DELETE_WINDOW", self.clear_area_magnifier)
-            self.area_magnifier_window.bind("<Escape>", lambda e: self.clear_area_magnifier())
             self.area_magnifier_canvas = tk.Canvas(self.area_magnifier_window)
             self.area_magnifier_canvas.pack()
             self.area_magnifier_canvas.bind("<Button-1>", lambda e: self.clear_area_magnifier())
+            # 绑定ESC键
+            self.area_magnifier_window.bind("<Escape>", lambda e: self.clear_area_magnifier())
 
-        # 获取屏幕尺寸
+        # 更新区域放大器窗口位置到屏幕中心
+        if self.area_magnifier_window and self.area_magnifier_canvas:
+            # 获取屏幕尺寸的90%
             screen_width = self.root.winfo_screenwidth()
             screen_height = self.root.winfo_screenheight()
+            max_width = int(screen_width * 0.9)
+            max_height = int(screen_height * 0.9)
 
-        # 计算放大后的图像尺寸
-            window_width = roi.shape[1]
-            window_height = roi.shape[0]
+            # 获取原始图像尺寸
+            original_width = roi.shape[1]
+            original_height = roi.shape[0]
 
-        # 计算缩放比例，确保图像至少有一边适应屏幕
-        scale_w = screen_width / window_width
-        scale_h = screen_height / window_height
-        scale = min(scale_w, scale_h)
+            # 计算缩放比例
+            width_ratio = max_width / original_width
+            height_ratio = max_height / original_height
+            scale_ratio = min(width_ratio, height_ratio)
 
-        # 如果图像尺寸大于屏幕，则进行缩放
-        if scale < 1:
-            window_width = int(window_width * scale)
-            window_height = int(window_height * scale)
-            roi = cv_resize(roi, (window_width, window_height))
+            # 如果图像尺寸超过限制，则进行缩放
+            if scale_ratio < 1:
+                new_width = int(original_width * scale_ratio)
+                new_height = int(original_height * scale_ratio)
+                roi = cv_resize(roi, (new_width, new_height))
+            else:
+                new_width = original_width
+                new_height = original_height
 
-        # 计算窗口位置使其居中
-            x = (screen_width - window_width) // 2
-            y = (screen_height - window_height) // 2
-
-        # 更新区域放大器窗口
-        if self.area_magnifier_window and self.area_magnifier_canvas:
-            self.area_magnifier_window.geometry(f"{window_width}x{window_height}+{x}+{y}")
-            self.area_magnifier_canvas.configure(width=window_width, height=window_height)
-            self.area_magnifier_canvas.delete("all")
+            # 计算窗口位置使其居中
+            x = (screen_width - new_width) // 2
+            # 考虑Windows任务栏的高度
+            taskbar_height = 40  # Windows任务栏的大致高度
+            y = (screen_height - taskbar_height - new_height) // 2
+            self.area_magnifier_window.geometry(f"{new_width}x{new_height}+{x}+{y}")
 
             # 显示放大的图像
             photo = ImageTk.PhotoImage(image=Image.fromarray(roi))
+            self.area_magnifier_canvas.configure(width=new_width, height=new_height)
+            self.area_magnifier_canvas.delete("all")
             self.area_magnifier_canvas.create_image(0, 0, anchor=tk.NW, image=photo)
             setattr(self.area_magnifier_canvas, "_photo_ref", photo)
 
