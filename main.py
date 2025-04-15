@@ -1185,26 +1185,42 @@ class ImageComparisonApp:
             self.area_magnifier_window = tk.Toplevel(self.root)
             self.area_magnifier_window.title("区域放大器")
             self.area_magnifier_window.protocol("WM_DELETE_WINDOW", self.clear_area_magnifier)
+            self.area_magnifier_window.bind("<Escape>", lambda e: self.clear_area_magnifier())
             self.area_magnifier_canvas = tk.Canvas(self.area_magnifier_window)
             self.area_magnifier_canvas.pack()
             self.area_magnifier_canvas.bind("<Button-1>", lambda e: self.clear_area_magnifier())
-            # 绑定ESC键
-            self.area_magnifier_window.bind("<Escape>", lambda e: self.clear_area_magnifier())
 
-        # 更新区域放大器窗口位置到屏幕中心
-        if self.area_magnifier_window and self.area_magnifier_canvas:
+        # 获取屏幕尺寸
             screen_width = self.root.winfo_screenwidth()
             screen_height = self.root.winfo_screenheight()
+
+        # 计算放大后的图像尺寸
             window_width = roi.shape[1]
             window_height = roi.shape[0]
+
+        # 计算缩放比例，确保图像至少有一边适应屏幕
+        scale_w = screen_width / window_width
+        scale_h = screen_height / window_height
+        scale = min(scale_w, scale_h)
+
+        # 如果图像尺寸大于屏幕，则进行缩放
+        if scale < 1:
+            window_width = int(window_width * scale)
+            window_height = int(window_height * scale)
+            roi = cv_resize(roi, (window_width, window_height))
+
+        # 计算窗口位置使其居中
             x = (screen_width - window_width) // 2
             y = (screen_height - window_height) // 2
+
+        # 更新区域放大器窗口
+        if self.area_magnifier_window and self.area_magnifier_canvas:
             self.area_magnifier_window.geometry(f"{window_width}x{window_height}+{x}+{y}")
+            self.area_magnifier_canvas.configure(width=window_width, height=window_height)
+            self.area_magnifier_canvas.delete("all")
 
             # 显示放大的图像
             photo = ImageTk.PhotoImage(image=Image.fromarray(roi))
-            self.area_magnifier_canvas.configure(width=window_width, height=window_height)
-            self.area_magnifier_canvas.delete("all")
             self.area_magnifier_canvas.create_image(0, 0, anchor=tk.NW, image=photo)
             setattr(self.area_magnifier_canvas, "_photo_ref", photo)
 
