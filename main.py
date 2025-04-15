@@ -171,12 +171,6 @@ class ImageComparisonApp:
         self.right_page_entry.insert(0, "1")
         self.right_page_entry.bind("<Return>", lambda e: self.jump_to_page("right"))
 
-        # 添加图片导航信息
-        nav_frame = ttk.Frame(toolbar)
-        nav_frame.pack(fill=tk.X, padx=5, pady=2)
-        self.nav_label = ttk.Label(nav_frame, text="")
-        self.nav_label.pack()
-
         # 坐标输入区域 - 移动到这里，放在按钮下方
         coords_frame = ttk.LabelFrame(toolbar, text="校准点坐标")
         coords_frame.pack(fill=tk.X, padx=5, pady=2)
@@ -184,7 +178,6 @@ class ImageComparisonApp:
         # 左图坐标
         left_coords = ttk.Frame(coords_frame)
         left_coords.pack(fill=tk.X, padx=5, pady=2)
-        ttk.Label(left_coords, text="左图:").pack()
 
         l1_frame = ttk.Frame(left_coords)
         l1_frame.pack(fill=tk.X)
@@ -221,7 +214,6 @@ class ImageComparisonApp:
         # 右图坐标
         right_coords = ttk.Frame(coords_frame)
         right_coords.pack(fill=tk.X, padx=5, pady=2)
-        ttk.Label(right_coords, text="右图:").pack()
 
         r1_frame = ttk.Frame(right_coords)
         r1_frame.pack(fill=tk.X)
@@ -605,10 +597,6 @@ class ImageComparisonApp:
                 self.load_image("right", self.right_images[right_page])
         except ValueError:
             pass
-
-        # 更新导航信息
-        if self.left_images and self.right_images:
-            self.nav_label.config(text=f"当前图片: {self.current_index + 1}/{min(len(self.left_images), len(self.right_images))}")
 
     def load_image(self, side: str, file_path: str) -> None:
         """加载图片
