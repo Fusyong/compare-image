@@ -373,7 +373,6 @@ class ImageComparisonApp:
                     cache.get("right_path") == self.right_images[self.current_index]
                 )]
 
-        print("\n=== 需要重新比较 ===")
         return False
 
     def toggle_compare(self):
@@ -432,9 +431,7 @@ class ImageComparisonApp:
         比较结果会被缓存，并在界面上显示。
         """
         try:
-            print("\n=== 开始新的比较 ===")
             mode = self.mode_var.get()
-            print(f"比较模式: {mode}")
 
             # 检查图像和坐标的有效性
             if self.left_image is None or self.right_image is None:
@@ -448,9 +445,7 @@ class ImageComparisonApp:
                 return
 
             # 执行比较
-            print("\n=== 执行比较 ===")
             if mode == "compare":
-                print("使用像素比较模式")
                 self.left_result = self.processor.compare_images(
                     self.left_image, self.right_image,
                     self.left_markers, self.right_markers,
@@ -462,7 +457,6 @@ class ImageComparisonApp:
                     "right"
                 )
             elif mode == "overlay":
-                print("使用叠加比较模式")
                 try:
                     alpha = float(self.alpha_entry.get()) / 100.0 if self.alpha_entry else 0.5
                     print(f"叠加透明度: {alpha:.2f}")
@@ -480,7 +474,6 @@ class ImageComparisonApp:
                     "right", alpha
                 )
             else:  # ocr mode
-                print("使用OCR比较模式")
                 self.left_result = self.processor.ocr_and_compare(
                     self.left_image, self.right_image,
                     self.left_markers, self.right_markers,
@@ -493,14 +486,11 @@ class ImageComparisonApp:
                 )
 
             # 检查比较结果
-            print("\n=== 比较结果 ===")
             if self.left_result is None or self.right_result is None:
-                print("错误：比较结果为空")
                 self.show_info("比较失败，请检查图像和标记点")
                 return
 
             # 缓存比较结果
-            print("缓存比较结果")
             cache_item: CacheItem = {
                 "left": self.left_result.copy() if self.left_result is not None else None,
                 "right": self.right_result.copy() if self.right_result is not None else None,
@@ -527,7 +517,6 @@ class ImageComparisonApp:
             self.cache_index = -1
 
             # 显示结果
-            print("显示比较结果")
             if self.left_result is not None and self.left_canvas:
                 self.display_image(self.left_canvas, self.left_result, self.left_markers)
             if self.right_result is not None and self.right_canvas:
@@ -541,8 +530,6 @@ class ImageComparisonApp:
                     self.show_info("已标记出差异区域并生成HTML报告")
             else:
                 self.show_info("比较完成")
-
-            print("=== 比较完成 ===\n")
 
         except Exception as e:
             import traceback
