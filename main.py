@@ -149,6 +149,28 @@ class ImageComparisonApp:
         ttk.Button(buttons_frame, text="加载左图组", command=lambda: self.load_image_group("left")).pack(side=tk.LEFT, expand=True, padx=(0,2))
         ttk.Button(buttons_frame, text="加载右图组", command=lambda: self.load_image_group("right")).pack(side=tk.LEFT, expand=True, padx=(2,0))
 
+        # 添加页码输入框
+        page_input_frame = ttk.Frame(toolbar)
+        page_input_frame.pack(fill=tk.X, padx=5, pady=2)
+
+        # 左图页码
+        left_page_frame = ttk.Frame(page_input_frame)
+        left_page_frame.pack(side=tk.LEFT, expand=True)
+        ttk.Label(left_page_frame, text="左页码:").pack(side=tk.LEFT)
+        self.left_page_entry = ttk.Entry(left_page_frame, width=5)
+        self.left_page_entry.pack(side=tk.LEFT, padx=2)
+        self.left_page_entry.insert(0, "1")
+        self.left_page_entry.bind("<Return>", lambda e: self.jump_to_page("left"))
+
+        # 右图页码
+        right_page_frame = ttk.Frame(page_input_frame)
+        right_page_frame.pack(side=tk.LEFT, expand=True)
+        ttk.Label(right_page_frame, text="右页码:").pack(side=tk.LEFT)
+        self.right_page_entry = ttk.Entry(right_page_frame, width=5)
+        self.right_page_entry.pack(side=tk.LEFT, padx=2)
+        self.right_page_entry.insert(0, "1")
+        self.right_page_entry.bind("<Return>", lambda e: self.jump_to_page("right"))
+
         # 添加图片导航信息
         nav_frame = ttk.Frame(toolbar)
         nav_frame.pack(fill=tk.X, padx=5, pady=2)
@@ -569,10 +591,20 @@ class ImageComparisonApp:
 
     def load_current_images(self):
         """加载当前索引位置的图片"""
-        if 0 <= self.current_index < len(self.left_images):
-            self.load_image("left", self.left_images[self.current_index])
-        if 0 <= self.current_index < len(self.right_images):
-            self.load_image("right", self.right_images[self.current_index])
+        # 根据页码输入框的值加载图片
+        try:
+            left_page = int(self.left_page_entry.get()) - 1
+            if 0 <= left_page < len(self.left_images):
+                self.load_image("left", self.left_images[left_page])
+        except ValueError:
+            pass
+
+        try:
+            right_page = int(self.right_page_entry.get()) - 1
+            if 0 <= right_page < len(self.right_images):
+                self.load_image("right", self.right_images[right_page])
+        except ValueError:
+            pass
 
         # 更新导航信息
         if self.left_images and self.right_images:
@@ -1293,24 +1325,104 @@ class ImageComparisonApp:
             # 恢复原来的值
             self.update_coordinate_entries()
 
+    def jump_to_page(self, side: str) -> None:
+        """跳转到指定页码
+
+        Args:
+            side: 图像侧（"left" 或 "right"）
+        """
+        try:
+            if side == "left":
+                page = int(self.left_page_entry.get()) - 1
+                max_page = len(self.left_images)
+            else:
+                page = int(self.right_page_entry.get()) - 1
+                max_page = len(self.right_images)
+
+            if 0 <= page < max_page:
+                # 更新当前索引
+                self.current_index = page
+
+                # 只加载输入侧的图像
+                if side == "left" and 0 <= page < len(self.left_images):
+                    self.load_image("left", self.left_images[page])
+                elif side == "right" and 0 <= page < len(self.right_images):
+                    self.load_image("right", self.right_images[page])
+
+                # 只更新输入侧的页码显示
+                if side == "left":
+                    self.left_page_entry.delete(0, tk.END)
+                    self.left_page_entry.insert(0, str(page + 1))
+                else:
+                    self.right_page_entry.delete(0, tk.END)
+                    self.right_page_entry.insert(0, str(page + 1))
+                self.show_info(f"已跳转到第{page + 1}页")
+            else:
+                self.show_info(f"页码必须在1-{max_page}之间")
+                # 恢复原来的页码
+                if side == "left":
+                    self.left_page_entry.delete(0, tk.END)
+                    self.left_page_entry.insert(0, str(self.current_index + 1))
+                else:
+                    self.right_page_entry.delete(0, tk.END)
+                    self.right_page_entry.insert(0, str(self.current_index + 1))
+        except ValueError:
+            self.show_info("请输入有效的页码")
+            # 恢复原来的页码
+            if side == "left":
+                self.left_page_entry.delete(0, tk.END)
+                self.left_page_entry.insert(0, str(self.current_index + 1))
+            else:
+                self.right_page_entry.delete(0, tk.END)
+                self.right_page_entry.insert(0, str(self.current_index + 1))
+
+    def update_page_entries(self) -> None:
+        """更新页码输入框的值"""
+        if self.left_page_entry and self.right_page_entry:
+            # 保持当前页码不变，只更新显示
+            self.left_page_entry.delete(0, tk.END)
+            self.right_page_entry.delete(0, tk.END)
+            self.left_page_entry.insert(0, str(self.current_index + 1))
+            self.right_page_entry.insert(0, str(self.current_index + 1))
+
     def navigate_images(self, direction):
         """导航到上一张或下一张图片"""
         if not self.left_images or not self.right_images:
             return
 
-        new_index = self.current_index + direction
-        if 0 <= new_index < min(len(self.left_images), len(self.right_images)):
-            # 更新索引
-            self.current_index = new_index
+        try:
+            # 获取当前页码
+            left_page = int(self.left_page_entry.get()) - 1
+            right_page = int(self.right_page_entry.get()) - 1
 
-            # 加载新图片，保持当前标记点位置不变
-            self.load_current_images()
+            # 计算新页码
+            new_left_page = left_page + direction
+            new_right_page = right_page + direction
 
-            # 如果当前处于比较状态，开始比较
-            if self.is_comparing:
-                # 先检查是否有可用的缓存
-                if not self.check_and_use_cache():
-                    self.start_comparison()
+            # 检查新页码是否有效
+            if 0 <= new_left_page < len(self.left_images) and 0 <= new_right_page < len(self.right_images):
+                # 更新页码输入框
+                self.left_page_entry.delete(0, tk.END)
+                self.left_page_entry.insert(0, str(new_left_page + 1))
+                self.right_page_entry.delete(0, tk.END)
+                self.right_page_entry.insert(0, str(new_right_page + 1))
+
+                # 加载新图片
+                self.load_image("left", self.left_images[new_left_page])
+                self.load_image("right", self.right_images[new_right_page])
+
+                # 更新当前索引（用于导航信息显示）
+                self.current_index = new_left_page
+
+                # 如果当前处于比较状态，开始比较
+                if self.is_comparing:
+                    # 先检查是否有可用的缓存
+                    if not self.check_and_use_cache():
+                        self.start_comparison()
+            else:
+                self.show_info("已到达图片边界")
+        except ValueError:
+            self.show_info("页码值无效")
 
     def bind_shortcuts(self):
         """绑定快捷键"""
