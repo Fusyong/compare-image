@@ -1,10 +1,12 @@
 """
 OpenCV工具函数
 """
+
+from typing import Optional, Tuple, cast
+
 import cv2
 import numpy as np
 from numpy.typing import NDArray
-from typing import Optional, Tuple, cast
 
 # 类型别名定义
 ImageArray = NDArray[np.uint8]  # OpenCV图像类型

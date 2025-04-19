@@ -1,6 +1,14 @@
 
 一个用于比较两组图像差异的 Python 工具，特别适用于图书文档页面的比较。该工具提供了多种比较模式，可以帮助用户快速发现图像之间的差异。
 
+## 安装
+
+```bash
+pip3 install opencv-python
+# OCR文字比较的依赖
+pip install rapidocr-onnxruntime
+```
+
 ## 功能与使用
 
 - **运行程序**：
