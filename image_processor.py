@@ -9,15 +9,14 @@ Classes:
     ImageProcessor: 图像处理器主类，提供各种图像处理和比较功能
 """
 
-import json
-from typing import List, Tuple, Optional, Callable, Dict, Any, Union, cast, Sequence, TypeVar
+import webbrowser
+import difflib
+from typing import List, Tuple, Optional, Callable, Sequence
+
 import cv2  # type: ignore
-import webbrowser  # 新增：用于自动打开HTML报告文件
 import numpy as np
 from numpy.typing import NDArray
-import difflib  # 新增：引入 difflib 模块，用于文本比较
 from rapidocr_onnxruntime import RapidOCR
-from PIL import Image, ImageDraw, ImageFont
 
 # 类型别名定义
 ImageArray = NDArray[np.uint8]  # OpenCV图像类型

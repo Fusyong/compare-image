@@ -8,9 +8,10 @@ Classes:
 """
 
 import tkinter as tk
+from typing import Optional, Tuple, Any
+
 from PIL import Image, ImageTk
 import cv2  # type: ignore
-from typing import Optional, Tuple, Any, cast
 import numpy as np
 from numpy.typing import NDArray
 
