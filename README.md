@@ -49,7 +49,7 @@
   - OpenCV 的 subtract、absdiff 等方法
   - 结构相似性指数(SSIM)方法
   - 使用 scikit-image 的 skimage.metrics.structural_similarity
-- 增加对活文字 PDF 的支持
+- 增加对活文字（Live Text）PDF 的支持
 
 ## 参考资料
 
